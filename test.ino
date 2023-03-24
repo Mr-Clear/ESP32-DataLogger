@@ -8,11 +8,15 @@ https://github.com/Risele/SHT3x
 
 #include "JetBrainsMono15.h"
 #include "TFT.h"
+#include "WIFI_Data.h"
 
 #include <DallasTemperature.h>
 #include <esp_adc_cal.h>
+#include <esp_log.h>
+#include <esp_sntp.h>
 #include <OneWire.h>
 #include <SHT3x.h>
+#include <WiFi.h>
 
 #include <vector>
 
@@ -30,8 +34,11 @@ DallasTemperature sensors(&oneWire);
 int numberOfDevices;
 DeviceAddress tempDeviceAddress;
 
+const char* ntpServer = "fritz.box";
+const char* time_zone = "CET-1CEST,M3.5.0,M10.5.0/3";  // TimeZone rule for Europe/Rome including daylight adjustment rules (optional)
+
 void setup(void) {
-  Serial.begin(19200);
+  Serial.begin(115200);
 
   tft.init();
   tft.loadFont(JetBrainsMono15);
@@ -80,9 +87,17 @@ void setup(void) {
   pinMode(BUTTON_1, INPUT_PULLUP);
   pinMode(BUTTON_2, INPUT_PULLUP);
 
+  tft.drawString("Connect WIFI...           ", 0, 0);
+  sntp_servermode_dhcp(0);
+  configTzTime(time_zone, ntpServer);
+  
+  WiFi.begin(WIFI_SSID, WIFI_PSK);
+
   tft.drawString("Initialization completed. ", 0, 0);
   tft.fillScreen(Color::Black);
 }
+
+wl_status_t lastWifiStatus = WL_IDLE_STATUS;
 
 unsigned long lastDuration = 0;
 unsigned long lastDelay = 0;
@@ -96,21 +111,27 @@ void loop() {
   String fps = "FPS: " + String(1000.0 / loopTime);
   String lastDurationString = "Dur: " + String(lastDuration) + " ms  ";
 
+  String time = getTime() + "               ";
+  //String time = String(esp_log_timestamp() / 1000);
+
   uint16_t v = analogRead(ADC_PIN);
   float battery_voltage = ((float)v / 4095.0) * 2.0 * 3.3 * (vref / 1000.0);
   String voltage = "VCC: " + String(battery_voltage) + " V  ";
+
+  wl_status_t wifiStatus = WiFi.status();
+  String wifiStatusString = "WIFI:" + wifiStatusToString(wifiStatus) + "             ";
+  if (wifiStatus != lastWifiStatus && wifiStatus == WL_CONNECTED) {
+  }
+  lastWifiStatus = wifiStatus;
 
   Sensor.UpdateData();
   uint8_t sensorError = Sensor.GetError();
   String temperature;
   String humidity;
-  if (sensorError)  
-  {
+  if (sensorError) {
     temperature = "Tmp: Error " + String(sensorError) + "    ";
     humidity = "Hum: Error " + String(sensorError) + "    ";
-  }
-  else
-  {
+  } else {
     temperature = "Tmp: " + String(Sensor.GetTemperature()) + " °C  ";
     humidity = "Hum: " + String(Sensor.GetRelHumidity()) + " %  ";
   }
@@ -120,12 +141,14 @@ void loop() {
   for (int i=0; i < numberOfDevices; i++) {
     if (sensors.getAddress(tempDeviceAddress, i)) {
       float tempC = sensors.getTempC(tempDeviceAddress);
-      tempSensors.emplace_back("Tm" + String(i) + " " + String(tempC) + " °C");
+      tempSensors.emplace_back("Tm:" + String(i) + " " + String(tempC) + " °C");
     }
   }
 
   String button1 = "BT1: " + String(digitalRead(BUTTON_1) ? "Up     " : "Down ");
   String button2 = "BT2: " + String(digitalRead(BUTTON_2) ? "Up     " : "Down ");
+
+  String ip = WiFi.localIP().toString();
 
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
@@ -136,21 +159,24 @@ void loop() {
   int y = -dy;
   int x = 0;
 
+  tft.drawString(time, x, y+=dy);
   tft.drawString(fps, x, y+=dy);
   tft.drawString(interval, x, y+=dy);
   tft.drawString(lastDurationString, x, y+=dy);
   tft.drawString(voltage, x, y+=dy);
   tft.drawString(temperature, x, y+=dy);
   tft.drawString(humidity, x, y+=dy);
+  tft.drawString(wifiStatusString, x, y+=dy);
 
   y = -dy;
+  tft.drawString("", x, y+=dy);
   x = tft.size.y() / 2;
-  for (const String &s : tempSensors)
-  {
+  for (const String &s : tempSensors) {
     tft.drawString(s, x, y+=dy);
   }
   tft.drawString(button1, x, y+=dy);
   tft.drawString(button2, x, y+=dy);
+  tft.drawString(ip, x, y+=dy);
 
   const int desiredInterval = 1000;
 
@@ -165,4 +191,29 @@ void printAddress(DeviceAddress deviceAddress) {
     if (deviceAddress[i] < 16) Serial.print("0");
       Serial.print(deviceAddress[i], HEX);
   }
+}
+
+String wifiStatusToString(wl_status_t status) {
+  switch (status) {
+    case WL_NO_SHIELD:       return "NoShield";
+    case WL_IDLE_STATUS:     return "Idle";
+    case WL_NO_SSID_AVAIL:   return "NoSsidAvail";
+    case WL_SCAN_COMPLETED:  return "ScanCompleted";
+    case WL_CONNECTED:       return "Connected";
+    case WL_CONNECT_FAILED:  return "ConnectFailed";
+    case WL_CONNECTION_LOST: return "ConnectionLost";
+    case WL_DISCONNECTED:    return "Disconnected";
+    default:                 return "InvalidState";
+  }
+}
+
+String getTime() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return String(millis() / 1000);
+  }
+  
+  char buf[64];
+  size_t written = strftime(buf, 64, "%a, %Y-%m-%d %H:%M:%S", &timeinfo);
+  return String(buf, written);
 }
