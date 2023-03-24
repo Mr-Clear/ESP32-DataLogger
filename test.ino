@@ -11,6 +11,8 @@
 
 #define ADC_PIN 34
 #define ONE_WIRE_BUS 17
+#define BUTTON_1 0
+#define BUTTON_2 35
 
 TFT tft;
 SHT3x Sensor;
@@ -66,6 +68,11 @@ void setup(void) {
     }
   }
 
+
+  tft.drawString("Init Buttons...           ", 0, 0);
+  pinMode(BUTTON_1, INPUT_PULLUP);
+  pinMode(BUTTON_2, INPUT_PULLUP);
+
   tft.drawString("Initialization completed. ", 0, 0);
   tft.fillScreen(Color::Black);
 }
@@ -110,6 +117,9 @@ void loop() {
     }
   }
 
+  String button1 = "BT1: " + String(digitalRead(BUTTON_1) ? "Up     " : "Down ");
+  String button2 = "BT2: " + String(digitalRead(BUTTON_2) ? "Up     " : "Down ");
+
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
   tft.drawRect(~tft.size - Vector2i{1,1}, Vector2i{1,1}, Color::Black);
@@ -117,19 +127,23 @@ void loop() {
 
   const int dy = 16;
   int y = -dy;
+  int x = 0;
 
-  tft.drawString(fps, 0, y+=dy);
-  tft.drawString(interval, 0, y+=dy);
-  tft.drawString(lastDurationString, 0, y+=dy);
-  tft.drawString(voltage, 0, y+=dy);
-  tft.drawString(temperature, 0, y+=dy);
-  tft.drawString(humidity, 0, y+=dy);
+  tft.drawString(fps, x, y+=dy);
+  tft.drawString(interval, x, y+=dy);
+  tft.drawString(lastDurationString, x, y+=dy);
+  tft.drawString(voltage, x, y+=dy);
+  tft.drawString(temperature, x, y+=dy);
+  tft.drawString(humidity, x, y+=dy);
 
   y = -dy;
+  x = tft.size.y() / 2;
   for (const String &s : tempSensors)
   {
-    tft.drawString(s, tft.size.y() / 2, y+=dy);
-  }  
+    tft.drawString(s, x, y+=dy);
+  }
+  tft.drawString(button1, x, y+=dy);
+  tft.drawString(button2, x, y+=dy);
 
   const int desiredInterval = 1000;
 
