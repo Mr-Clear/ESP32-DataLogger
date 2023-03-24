@@ -1,4 +1,11 @@
 
+/* Required Libraries:
+https://github.com/Xinyuan-LilyGO/TTGO-T-Display /TFT_eSPI
+https://github.com/PaulStoffregen/OneWire
+https://github.com/milesburton/Arduino-Temperature-Control-Library
+https://github.com/Risele/SHT3x
+*/
+
 #include "JetBrainsMono15.h"
 #include "TFT.h"
 
