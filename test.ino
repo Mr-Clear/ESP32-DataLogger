@@ -46,7 +46,7 @@ void setup(void) {
   tft.setRotation(3);
   tft.fillScreen(Color::Black);
 
-  tft.drawString("Init ADC...               ", 0, 0);
+  tft.drawString("Init ADC...               ", {0, 0});
   esp_adc_cal_characteristics_t adc_chars;
   esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);    //Check type of calibration value used to characterize ADC
   if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
@@ -58,10 +58,10 @@ void setup(void) {
       Serial.println("Default Vref: 1100mV");
   }
 
-  tft.drawString("Init SHT30 Sensor...   ", 0, 0);
+  tft.drawString("Init SHT30 Sensor...   ", {0, 0});
   Sht30Sensor.Begin();
 
-  tft.drawString("Init Temp Sensors...      ", 0, 0);
+  tft.drawString("Init Temp Sensors...      ", {0, 0});
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
   Serial.print("Locating devices...");
@@ -84,17 +84,17 @@ void setup(void) {
   }
 
 
-  tft.drawString("Init Buttons...           ", 0, 0);
+  tft.drawString("Init Buttons...           ", {0, 0});
   pinMode(BUTTON_1, INPUT_PULLUP);
   pinMode(BUTTON_2, INPUT_PULLUP);
 
-  tft.drawString("Connect WIFI...           ", 0, 0);
+  tft.drawString("Connect WIFI...           ", {0, 0});
   sntp_servermode_dhcp(0);
   configTzTime(time_zone, ntpServer);
   
   WiFi.begin(WIFI_SSID, WIFI_PSK);
 
-  tft.drawString("Initialization completed. ", 0, 0);
+  tft.drawString("Initialization completed. ", {0, 0});
   tft.fillScreen(Color::Black);
 }
 
@@ -104,7 +104,7 @@ unsigned long lastDuration = 0;
 unsigned long lastDelay = 0;
 unsigned long lastStart = 0;
 void loop() {
-  tft.drawRect(~tft.size - Vector2i{1,1}, Vector2i{1,1}, Color::White);
+  tft.drawRect(tft.size() - Vector2i{1,1}, Vector2i{1,1}, Color::White);
   unsigned long start = millis();
   unsigned long loopTime = start - lastStart;
   lastStart = start;
@@ -159,35 +159,34 @@ void loop() {
 
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
-  tft.drawRect(~tft.size - Vector2i{1,1}, Vector2i{1,1}, Color::Black);
+  tft.drawRect(tft.size() - Vector2i{1,1}, Vector2i{1,1}, Color::Black);
   //tft.fillScreen(Color::Black);
 
-  const int dy = 16;
-  int y = -dy;
-  int x = 0;
 
-  tft.drawString(time, x, y+=dy);
-  tft.drawString(fps, x, y+=dy);
-  tft.drawString(interval, x, y+=dy);
-  tft.drawString(lastDurationString, x, y+=dy);
-  tft.drawString(voltageString, x, y+=dy);
-  tft.drawString(sht30TemperatureString, x, y+=dy);
-  tft.drawString(sht30HumidityString, x, y+=dy);
-  tft.drawString(wifiStatusString, x, y+=dy);
+  const Vector2i shift{0, 16};
+  Vector2i pos = -shift;
 
-  y = -dy;
-  tft.drawString("", x, y+=dy);
-  x = tft.size.y() / 2;
+  tft.drawString(time, pos+=shift);
+  tft.drawString(fps, pos+=shift);
+  tft.drawString(interval, pos+=shift);
+  tft.drawString(lastDurationString, pos+=shift);
+  tft.drawString(voltageString, pos+=shift);
+  tft.drawString(sht30TemperatureString, pos+=shift);
+  tft.drawString(sht30HumidityString, pos+=shift);
+  tft.drawString(wifiStatusString, pos+=shift);
+
+  pos = Vector2i{tft.size().x() / 2, 0} - shift;
+  tft.drawString("", pos+=shift);
   for (const String &s : sht30Strings) {
-    tft.drawString(s, x, y+=dy);
+    tft.drawString(s, pos+=shift);
   }
-  tft.drawString(button1, x, y+=dy);
-  tft.drawString(button2, x, y+=dy);
-  tft.drawString(ip, x, y+=dy);
+  tft.drawString(button1, pos+=shift);
+  tft.drawString(button2, pos+=shift);
+  tft.drawString(ip, pos+=shift);
 
   if (wifiStatus == WL_CONNECTED) {
     int httpResponseCode = sendData(lastDuration, voltage, sht30Temperature, sht30Humidity, sht30Values);
-    tft.drawString(ip, tft.size.y() -50, y);
+    tft.drawString(ip, tft.size() - Vector2i{-50, 0});
   }
 
   const int desiredInterval = 1000;
@@ -232,17 +231,33 @@ String getTime() {
 
 int sendData(unsigned long duration, double voltage, double sht30Temp, double sht30Hum, const std::vector<double> &ds18b20)
 {
-  Serial.print("HTTPClient begin... ");
   HTTPClient http;
   http.begin("https://www.klierlinge.de/rrd/update");
-  String data = String("{\"args\": [\"esp32test.rrd\", \"N") +
-                ":" + String(duration) +
-                ":" + String(voltage) +
-                ":" + (!std::isnan(sht30Temp) ? String(sht30Temp) : "U") +
-                ":" + (!std::isnan(sht30Hum) ? String(sht30Hum) : "U") +
-                ":" + (ds18b20.size() > 0 ? String(ds18b20[0]) : "U") +
-                ":" + (ds18b20.size() > 1 ? String(ds18b20[1]) : "U") +
-                ":" + (ds18b20.size() > 2 ? String(ds18b20[2]) : "U") + "\"]}";
+
+  String data;
+  data.reserve(1024);
+  data += "{\"args\": [\"esp32test.rrd\", \"N:";
+  data += duration;
+  data += ":";
+  data += voltage;
+  for (const double &v : {sht30Temp, sht30Hum})
+  {
+    data += ":";
+    if (std::isnan(v))
+      data += "U";
+    else
+      data += v;
+  }
+  for (int i = 0; i < 3; ++i)
+  {
+    data += ":";
+    if (ds18b20.size() > i)
+      data += ds18b20[i];
+    else
+      data += "U";
+  }
+  data += "\"]}";
+
   int httpResponseCode = http.POST(data);
   http.end();
   return httpResponseCode;
