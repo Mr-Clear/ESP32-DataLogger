@@ -5,7 +5,7 @@ https://github.com/PaulStoffregen/OneWire
 https://github.com/milesburton/Arduino-Temperature-Control-Library
 https://github.com/Risele/SHT3x
 */
-
+#include "HttpPostTask.h"
 #include "JetBrainsMono15.h"
 #include "TFT.h"
 #include "WIFI_Data.h"
@@ -14,7 +14,6 @@ https://github.com/Risele/SHT3x
 #include <esp_adc_cal.h>
 #include <esp_log.h>
 #include <esp_sntp.h>
-#include <HTTPClient.h>
 #include <OneWire.h>
 #include <SHT3x.h>
 #include <WiFi.h>
@@ -38,8 +37,22 @@ DeviceAddress tempDeviceAddress;
 const char* ntpServer = "fritz.box";
 const char* time_zone = "CET-1CEST,M3.5.0,M10.5.0/3";  // TimeZone rule for Europe/Rome including daylight adjustment rules (optional)
 
+struct SensorData {
+  unsigned long duration;
+  double voltage;
+  double sht30Temperature;
+  double sht30Humidity;
+  std::vector<double> ds18b20;
+};
+
+String postData();
+bool isWifiConnected();
+SensorData sensorData;
+HttpPostTask httpPostTask(1000, isWifiConnected, postData);
+
 void setup(void) {
   Serial.begin(115200);
+  Serial.println();
 
   tft.init();
   tft.loadFont(JetBrainsMono15);
@@ -70,7 +83,7 @@ void setup(void) {
   Serial.println(" devices.");
   for(int i=0;i<numberOfDevices; i++){
     // Search the wire for address
-    if(sensors.getAddress(tempDeviceAddress, i)){
+    if(sensors.getAddress(tempDeviceAddress, i)) {
       Serial.print("Found device ");
       Serial.print(i, DEC);
       Serial.print(" with address: ");
@@ -96,6 +109,8 @@ void setup(void) {
 
   tft.drawString("Initialization completed. ", {0, 0});
   tft.fillScreen(Color::Black);
+
+  httpPostTask.start();
 }
 
 wl_status_t lastWifiStatus = WL_IDLE_STATUS;
@@ -116,8 +131,8 @@ void loop() {
   //String time = String(esp_log_timestamp() / 1000);
 
   uint16_t v = analogRead(ADC_PIN);
-  double voltage = v / 4095.0 * 2.0 * 3.3 * (vref / 1000.0);
-  String voltageString = "VCC: " + String(voltage) + " V  ";
+  sensorData.voltage = v / 4095.0 * 2.0 * 3.3 * (vref / 1000.0);
+  String voltageString = "VCC: " + String(sensorData.voltage) + " V  ";
 
   wl_status_t wifiStatus = WiFi.status();
   String wifiStatusString = "WIFI:" + wifiStatusToString(wifiStatus) + "             ";
@@ -127,28 +142,27 @@ void loop() {
 
   Sht30Sensor.UpdateData();
   uint8_t sensorError = Sht30Sensor.GetError();
-  double sht30Temperature = NAN;
-  double sht30Humidity = NAN;
   String sht30TemperatureString;
   String sht30HumidityString;
   if (sensorError) {
+    sensorData.sht30Temperature = NAN;
+    sensorData.sht30Humidity = NAN;
     sht30TemperatureString = "Tmp: Error " + String(sensorError) + "    ";
     sht30HumidityString = "Hum: Error " + String(sensorError) + "    ";
   } else {
-    sht30Temperature = Sht30Sensor.GetTemperature();
-    sht30Humidity = Sht30Sensor.GetRelHumidity();
-    sht30TemperatureString = "Tmp: " + String(sht30Temperature) + " °C  ";
-    sht30HumidityString = "Hum: " + String(sht30Humidity) + " %  ";
+    sensorData.sht30Temperature = Sht30Sensor.GetTemperature();
+    sensorData.sht30Humidity = Sht30Sensor.GetRelHumidity();
+    sht30TemperatureString = "Tmp: " + String(sensorData.sht30Temperature) + " °C  ";
+    sht30HumidityString = "Hum: " + String(sensorData.sht30Humidity) + " %  ";
   }
 
-  std::vector<double> sht30Values;
-  std::vector<String> sht30Strings;
+  std::vector<String> ds18b20Strings;
   sensors.requestTemperatures();
   for (int i=0; i < numberOfDevices; i++) {
     if (sensors.getAddress(tempDeviceAddress, i)) {
       float tempC = sensors.getTempC(tempDeviceAddress);
-      sht30Values.emplace_back(tempC);
-      sht30Strings.emplace_back("Tm:" + String(i) + " " + String(tempC) + " °C");
+      sensorData.ds18b20.emplace_back(tempC);
+      ds18b20Strings.emplace_back("Tm:" + String(i) + " " + String(tempC) + " °C");
     }
   }
 
@@ -177,17 +191,17 @@ void loop() {
 
   pos = Vector2i{tft.size().x() / 2, 0} - shift;
   tft.drawString("", pos+=shift);
-  for (const String &s : sht30Strings) {
+  for (const String &s : ds18b20Strings) {
     tft.drawString(s, pos+=shift);
   }
   tft.drawString(button1, pos+=shift);
   tft.drawString(button2, pos+=shift);
   tft.drawString(ip, pos+=shift);
 
-  if (wifiStatus == WL_CONNECTED) {
-    int httpResponseCode = sendData(lastDuration, voltage, sht30Temperature, sht30Humidity, sht30Values);
-    tft.drawString(ip, tft.size() - Vector2i{-50, 0});
-  }
+  //if (wifiStatus == WL_CONNECTED) {
+  //  int httpResponseCode = sendData(lastDuration, voltage, sht30Temperature, sht30Humidity, sht30Values);
+  //  tft.drawString(httpResponseCode, tft.size() - Vector2i{-50, 0});
+  //}
 
   const int desiredInterval = 1000;
   lastDuration = millis() - start;
@@ -229,18 +243,14 @@ String getTime() {
   return String(buf, written);
 }
 
-int sendData(unsigned long duration, double voltage, double sht30Temp, double sht30Hum, const std::vector<double> &ds18b20)
-{
-  HTTPClient http;
-  http.begin("https://www.klierlinge.de/rrd/update");
-
+String postData() {
   String data;
   data.reserve(1024);
   data += "{\"args\": [\"esp32test.rrd\", \"N:";
-  data += duration;
+  data += sensorData.duration;
   data += ":";
-  data += voltage;
-  for (const double &v : {sht30Temp, sht30Hum})
+  data += sensorData.voltage;
+  for (const double &v : {sensorData.sht30Temperature, sensorData.sht30Humidity})
   {
     data += ":";
     if (std::isnan(v))
@@ -251,14 +261,16 @@ int sendData(unsigned long duration, double voltage, double sht30Temp, double sh
   for (int i = 0; i < 3; ++i)
   {
     data += ":";
-    if (ds18b20.size() > i)
-      data += ds18b20[i];
+    if (sensorData.ds18b20.size() > i)
+      data += sensorData.ds18b20[i];
     else
       data += "U";
   }
   data += "\"]}";
 
-  int httpResponseCode = http.POST(data);
-  http.end();
-  return httpResponseCode;
+  return data;
+}
+
+bool isWifiConnected() {
+  return WiFi.status() == WL_CONNECTED;
 }
