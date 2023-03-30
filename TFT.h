@@ -1,3 +1,5 @@
+#pragma once
+
 #include <sys/_stdint.h>
 
 #include "Color.h"

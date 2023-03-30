@@ -8,7 +8,7 @@ https://github.com/Risele/SHT3x
 #include "HttpPostTask.h"
 #include "JetBrainsMono15.h"
 #include "TFT.h"
-#include "WIFI_Data.h"
+#include "WifiKeepAliveTask.h"
 
 #include <DallasTemperature.h>
 #include <esp_adc_cal.h>
@@ -16,7 +16,6 @@ https://github.com/Risele/SHT3x
 #include <esp_sntp.h>
 #include <OneWire.h>
 #include <SHT3x.h>
-#include <WiFi.h>
 
 #include <vector>
 
@@ -46,9 +45,10 @@ struct SensorData {
 };
 
 String postData();
-bool isWifiConnected();
 SensorData sensorData;
-HttpPostTask httpPostTask(1000, isWifiConnected, postData);
+WifiKeepAliveTask wifiTask;
+
+HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask), postData);
 
 void setup(void) {
   Serial.begin(115200);
@@ -104,44 +104,37 @@ void setup(void) {
   tft.drawString("Connect WIFI...           ", {0, 0});
   sntp_servermode_dhcp(0);
   configTzTime(time_zone, ntpServer);
-  
-  WiFi.begin(WIFI_SSID, WIFI_PSK);
 
   tft.drawString("Initialization completed. ", {0, 0});
   tft.fillScreen(Color::Black);
 
+  wifiTask.start();
   httpPostTask.start();
 }
-
-wl_status_t lastWifiStatus = WL_IDLE_STATUS;
 
 unsigned long lastDuration = 0;
 unsigned long lastDelay = 0;
 unsigned long lastStart = 0;
 void loop() {
   tft.drawRect(tft.size() - Vector2i{1,1}, Vector2i{1,1}, Color::White);
-  unsigned long start = millis();
-  unsigned long loopTime = start - lastStart;
+  const unsigned long start = millis();
+  const unsigned long loopTime = start - lastStart;
   lastStart = start;
-  String interval = "Itr: " + String(loopTime) + " ms  ";
-  String fps = "FPS: " + String(1000.0 / loopTime);
-  String lastDurationString = "Dur: " + String(lastDuration) + " ms  ";
+  const String interval = "Itr: " + String(loopTime) + " ms  ";
+  const String fps = "FPS: " + String(1000.0 / loopTime);
+  const String lastDurationString = "Dur: " + String(lastDuration) + " ms  ";
 
-  String time = getTime() + "               ";
+  const String time = getTime() + "               ";
   //String time = String(esp_log_timestamp() / 1000);
 
-  uint16_t v = analogRead(ADC_PIN);
+  const uint16_t v = analogRead(ADC_PIN);
   sensorData.voltage = v / 4095.0 * 2.0 * 3.3 * (vref / 1000.0);
-  String voltageString = "VCC: " + String(sensorData.voltage) + " V  ";
+  const String voltageString = "VCC: " + String(sensorData.voltage) + " V  ";
 
-  wl_status_t wifiStatus = WiFi.status();
-  String wifiStatusString = "WIFI:" + wifiStatusToString(wifiStatus) + "             ";
-  if (wifiStatus != lastWifiStatus && wifiStatus == WL_CONNECTED) {
-  }
-  lastWifiStatus = wifiStatus;
+  const String wifiStatusString = wifiTask.wifiStatusText() + "           ";
 
   Sht30Sensor.UpdateData();
-  uint8_t sensorError = Sht30Sensor.GetError();
+  const uint8_t sensorError = Sht30Sensor.GetError();
   String sht30TemperatureString;
   String sht30HumidityString;
   if (sensorError) {
@@ -156,20 +149,22 @@ void loop() {
     sht30HumidityString = "Hum: " + String(sensorData.sht30Humidity) + " %  ";
   }
 
+  std::vector<double> ds18b20;
   std::vector<String> ds18b20Strings;
   sensors.requestTemperatures();
   for (int i=0; i < numberOfDevices; i++) {
     if (sensors.getAddress(tempDeviceAddress, i)) {
       float tempC = sensors.getTempC(tempDeviceAddress);
-      sensorData.ds18b20.emplace_back(tempC);
+      ds18b20.emplace_back(tempC);
       ds18b20Strings.emplace_back("Tm:" + String(i) + " " + String(tempC) + " °C");
     }
   }
+  sensorData.ds18b20 = ds18b20;
 
-  String button1 = "BT1: " + String(digitalRead(BUTTON_1) ? "Up     " : "Down ");
-  String button2 = "BT2: " + String(digitalRead(BUTTON_2) ? "Up     " : "Down ");
+  const String button1 = "BT1: " + String(digitalRead(BUTTON_1) ? "Up     " : "Down ");
+  const String button2 = "BT2: " + String(digitalRead(BUTTON_2) ? "Up     " : "Down ");
 
-  String ip = WiFi.localIP().toString() + "   ";
+  const String ip = wifiTask.localIp() + "      ";
 
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
@@ -217,20 +212,6 @@ void printAddress(DeviceAddress deviceAddress) {
   }
 }
 
-String wifiStatusToString(wl_status_t status) {
-  switch (status) {
-    case WL_NO_SHIELD:       return "NoShield";
-    case WL_IDLE_STATUS:     return "Idle";
-    case WL_NO_SSID_AVAIL:   return "NoSsidAvail";
-    case WL_SCAN_COMPLETED:  return "ScanCompleted";
-    case WL_CONNECTED:       return "Connected";
-    case WL_CONNECT_FAILED:  return "ConnectFailed";
-    case WL_CONNECTION_LOST: return "ConnectionLost";
-    case WL_DISCONNECTED:    return "Disconnected";
-    default:                 return "InvalidState";
-  }
-}
-
 String getTime() {
   return String(millis() / 1000);
   struct tm timeinfo;
@@ -269,8 +250,4 @@ String postData() {
   data += "\"]}";
 
   return data;
-}
-
-bool isWifiConnected() {
-  return WiFi.status() == WL_CONNECTED;
 }

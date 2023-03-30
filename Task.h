@@ -1,3 +1,5 @@
+#pragma once
+
 #include <limits.h>
 #include <stdint.h>
 
@@ -19,6 +21,7 @@ class Task {
     };
 
     Task(unsigned long interval, const char* name, uint32_t stackSize = 4096, unsigned int priority = 10, Core core = Core::Any);
+    virtual ~Task() = default;
     void start();
     void stop();
     bool isRunning() const;

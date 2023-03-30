@@ -1,9 +1,10 @@
+#include "esp_log.h"
 #include "HttpPostTask.h"
 
 #include <HTTPClient.h>
 
 HttpPostTask::HttpPostTask(unsigned long interval, std::function<bool()> getWifiConnected, std::function<String()> getPostDataSource) :
-  Task(interval, "HTTP POST", 6144, 10, Core::Core0),
+  Task(interval, "HTTP POST", 8192, 10, Core::Core0),
   _getWifiConnected(getWifiConnected),
   _postDataSource(getPostDataSource)
 { }
@@ -12,6 +13,7 @@ HttpPostTask::~HttpPostTask() = default;
 
 void HttpPostTask::setup() {
   _httpClient.reset(new HTTPClient());
+  _httpClient->setReuse(true);
 }
 
 void HttpPostTask::loop() {

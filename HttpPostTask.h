@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Task.h"
 
 #include <WString.h>
