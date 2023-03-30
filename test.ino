@@ -5,6 +5,7 @@ https://github.com/PaulStoffregen/OneWire
 https://github.com/milesburton/Arduino-Temperature-Control-Library
 https://github.com/Risele/SHT3x
 */
+#include "FiberTask.h"
 #include "HttpPostTask.h"
 #include "JetBrainsMono15.h"
 #include "TFT.h"
@@ -46,8 +47,9 @@ struct SensorData {
 
 String postData();
 SensorData sensorData;
-WifiKeepAliveTask wifiTask;
 
+WifiKeepAliveTask wifiTask;
+FiberTask fiberTask1(1000, "FiberTask0", 4096, 10, Task::Core::Core1);
 HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask), postData);
 
 void setup(void) {
@@ -109,6 +111,7 @@ void setup(void) {
   tft.fillScreen(Color::Black);
 
   wifiTask.start();
+  fiberTask1.start();
   httpPostTask.start();
 }
 
