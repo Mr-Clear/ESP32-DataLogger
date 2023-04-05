@@ -8,6 +8,8 @@ https://github.com/Risele/SHT3x
 #include "FiberTask.h"
 #include "HttpPostTask.h"
 #include "JetBrainsMono15.h"
+#include "SensorData.h"
+#include "Sht30Fiber.h"
 #include "TFT.h"
 #include "WifiKeepAliveTask.h"
 
@@ -16,7 +18,6 @@ https://github.com/Risele/SHT3x
 #include <esp_log.h>
 #include <esp_sntp.h>
 #include <OneWire.h>
-#include <SHT3x.h>
 
 #include <vector>
 
@@ -26,7 +27,6 @@ https://github.com/Risele/SHT3x
 #define BUTTON_2 35
 
 TFT tft;
-SHT3x Sht30Sensor;
 int vref = 1100;
 
 OneWire oneWire(ONE_WIRE_BUS);
@@ -37,19 +37,12 @@ DeviceAddress tempDeviceAddress;
 const char* ntpServer = "fritz.box";
 const char* time_zone = "CET-1CEST,M3.5.0,M10.5.0/3";  // TimeZone rule for Europe/Rome including daylight adjustment rules (optional)
 
-struct SensorData {
-  unsigned long duration;
-  double voltage;
-  double sht30Temperature;
-  double sht30Humidity;
-  std::vector<double> ds18b20;
-};
-
 String postData();
 SensorData sensorData;
 
 WifiKeepAliveTask wifiTask;
 FiberTask fiberTask1(1000, "FiberTask0", 4096, 10, Task::Core::Core1);
+Sht30Fiber sht30Fiber(sensorData);
 HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask), postData);
 
 void setup(void) {
@@ -72,9 +65,6 @@ void setup(void) {
   } else {
       Serial.println("Default Vref: 1100mV");
   }
-
-  tft.drawString("Init SHT30 Sensor...   ", {0, 0});
-  Sht30Sensor.Begin();
 
   tft.drawString("Init Temp Sensors...      ", {0, 0});
   sensors.begin();
@@ -110,6 +100,8 @@ void setup(void) {
   tft.drawString("Initialization completed. ", {0, 0});
   tft.fillScreen(Color::Black);
 
+  fiberTask1.addFiber(sht30Fiber);
+
   wifiTask.start();
   fiberTask1.start();
   httpPostTask.start();
@@ -136,22 +128,6 @@ void loop() {
 
   const String wifiStatusString = wifiTask.wifiStatusText() + "           ";
 
-  Sht30Sensor.UpdateData();
-  const uint8_t sensorError = Sht30Sensor.GetError();
-  String sht30TemperatureString;
-  String sht30HumidityString;
-  if (sensorError) {
-    sensorData.sht30Temperature = NAN;
-    sensorData.sht30Humidity = NAN;
-    sht30TemperatureString = "Tmp: Error " + String(sensorError) + "    ";
-    sht30HumidityString = "Hum: Error " + String(sensorError) + "    ";
-  } else {
-    sensorData.sht30Temperature = Sht30Sensor.GetTemperature();
-    sensorData.sht30Humidity = Sht30Sensor.GetRelHumidity();
-    sht30TemperatureString = "Tmp: " + String(sensorData.sht30Temperature) + " °C  ";
-    sht30HumidityString = "Hum: " + String(sensorData.sht30Humidity) + " %  ";
-  }
-
   std::vector<double> ds18b20;
   std::vector<String> ds18b20Strings;
   sensors.requestTemperatures();
@@ -167,6 +143,8 @@ void loop() {
   const String button1 = "BT1: " + String(digitalRead(BUTTON_1) ? "Up     " : "Down ");
   const String button2 = "BT2: " + String(digitalRead(BUTTON_2) ? "Up     " : "Down ");
 
+  const String sht30TemperatureString = (sensorData.sht30Error ? ("Tmp Err: " + String(sensorData.sht30Error)) : ("Tmp: " + String(sensorData.sht30Temperature))) + "       ";
+  const String sht30HumidityString = (sensorData.sht30Error ? ("Hum Err: " + String(sensorData.sht30Error)) : ("Hum: " + String(sensorData.sht30Humidity))) + "       ";
   const String ip = wifiTask.localIp() + "      ";
 
   tft.setRotation(3);

@@ -4,18 +4,18 @@ FiberTask::FiberTask(unsigned long interval, const char* name, uint32_t stackSiz
   Task{interval, name, stackSize, priority, core}
 { }
 
-void FiberTask::addFiber(std::unique_ptr<Fiber> &fiber) {
-  _fibers.emplace_back(std::move(fiber));
+void FiberTask::addFiber(Fiber &fiber) {
+  _fibers.emplace_back(&fiber);
 }
 
 void FiberTask::setup() {
-  for (std::unique_ptr<Fiber> &fiber : _fibers) {
+  for (Fiber *fiber : _fibers) {
     fiber->setup();
   }
 }
 
 void FiberTask::loop() {
-  for (std::unique_ptr<Fiber> &fiber : _fibers) {
+  for (Fiber *fiber : _fibers) {
     fiber->loop();
   }
 }
