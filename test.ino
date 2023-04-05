@@ -5,6 +5,7 @@ https://github.com/PaulStoffregen/OneWire
 https://github.com/milesburton/Arduino-Temperature-Control-Library
 https://github.com/Risele/SHT3x
 */
+
 #include "FiberTask.h"
 #include "HttpPostTask.h"
 #include "JetBrainsMono15.h"
@@ -41,7 +42,7 @@ String postData();
 SensorData sensorData;
 
 WifiKeepAliveTask wifiTask;
-FiberTask fiberTask1(1000, "FiberTask0", 4096, 10, Task::Core::Core1);
+FiberTask fiberTask1(1000, "FiberTask0", 8192, 10, Task::Core::Core1);
 Sht30Fiber sht30Fiber(sensorData);
 HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask), postData);
 
@@ -147,6 +148,9 @@ void loop() {
   const String sht30HumidityString = (sensorData.sht30Error ? ("Hum Err: " + String(sensorData.sht30Error)) : ("Hum: " + String(sensorData.sht30Humidity))) + "       ";
   const String ip = wifiTask.localIp() + "      ";
 
+  const String memoryTotal = "Mem: " + String(ESP.getHeapSize()) + "       ";
+  const String memoryFree = "Fre: " + String(ESP.getFreeHeap()) + "       ";
+
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
   tft.drawRect(tft.size() - Vector2i{1,1}, Vector2i{1,1}, Color::Black);
@@ -170,14 +174,11 @@ void loop() {
   for (const String &s : ds18b20Strings) {
     tft.drawString(s, pos+=shift);
   }
-  tft.drawString(button1, pos+=shift);
-  tft.drawString(button2, pos+=shift);
+  //tft.drawString(button1, pos+=shift);
+  //tft.drawString(button2, pos+=shift);
+  tft.drawString(memoryTotal, pos+=shift);
+  tft.drawString(memoryFree, pos+=shift);
   tft.drawString(ip, pos+=shift);
-
-  //if (wifiStatus == WL_CONNECTED) {
-  //  int httpResponseCode = sendData(lastDuration, voltage, sht30Temperature, sht30Humidity, sht30Values);
-  //  tft.drawString(httpResponseCode, tft.size() - Vector2i{-50, 0});
-  //}
 
   const int desiredInterval = 1000;
   lastDuration = millis() - start;
