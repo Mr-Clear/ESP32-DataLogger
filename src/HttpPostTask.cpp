@@ -1,4 +1,3 @@
-#include "esp_log.h"
 #include "HttpPostTask.h"
 
 #include <HTTPClient.h>

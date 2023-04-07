@@ -6,13 +6,14 @@ https://github.com/milesburton/Arduino-Temperature-Control-Library
 https://github.com/Risele/SHT3x
 */
 
-#include "FiberTask.h"
 #include "HttpPostTask.h"
-#include "JetBrainsMono15.h"
 #include "SensorData.h"
 #include "Sht30Fiber.h"
-#include "TFT.h"
 #include "WifiKeepAliveTask.h"
+
+#include <FiberTask.h>
+#include <JetBrainsMono15.h>
+#include <TFT.h>
 
 #include <DallasTemperature.h>
 #include <esp_adc_cal.h>
