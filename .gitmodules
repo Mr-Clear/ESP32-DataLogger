@@ -1,0 +1,12 @@
+[submodule "lib/TTGO-T-Display"]
+	path = lib/TTGO-T-Display
+	url = https://github.com/Xinyuan-LilyGO/TTGO-T-Display
+[submodule "lib/OneWire"]
+	path = lib/OneWire
+	url = https://github.com/PaulStoffregen/OneWire
+[submodule "lib/Arduino-Temperature-Control-Library"]
+	path = lib/Arduino-Temperature-Control-Library
+	url = https://github.com/milesburton/Arduino-Temperature-Control-Library
+[submodule "lib/SHT3x"]
+	path = lib/SHT3x
+	url = https://github.com/Risele/SHT3x
