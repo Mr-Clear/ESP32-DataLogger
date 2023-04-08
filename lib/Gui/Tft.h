@@ -10,7 +10,7 @@
 
 using Vector2i = Vector2<int>;
 
-class TFT : public TFT_eSPI
+class Tft : public TFT_eSPI
 {
 public:
   const Vector2i &size();

@@ -19,7 +19,7 @@ namespace {
 }
 
 WifiKeepAliveTask::WifiKeepAliveTask() :
-  Task(1000, "WIFI Keep Alive", 4096, 10, Core::Core0)
+  LoopTask(1000, "WIFI Keep Alive", 4096, 10, Core::Core0)
 { }
 
 WifiKeepAliveTask::~WifiKeepAliveTask() = default;

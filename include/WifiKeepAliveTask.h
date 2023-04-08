@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Task.h"
+#include "LoopTask.h"
 
 #include <WString.h>
 
-class WifiKeepAliveTask : public Task {
+class WifiKeepAliveTask : public LoopTask {
 public:
   WifiKeepAliveTask();
   ~WifiKeepAliveTask();

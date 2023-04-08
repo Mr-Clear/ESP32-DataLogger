@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Task.h>
+#include <LoopTask.h>
 
 #include <WString.h>
 
@@ -9,7 +9,7 @@
 
 class HTTPClient;
 
-class HttpPostTask : public Task {
+class HttpPostTask : public LoopTask {
 public:
   HttpPostTask(unsigned long interval, std::function<bool()> getWifiConnected, std::function<String()> postDataSource);
   ~HttpPostTask();

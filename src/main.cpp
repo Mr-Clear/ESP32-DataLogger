@@ -9,15 +9,14 @@ https://github.com/Risele/SHT3x
 #include "HttpPostTask.h"
 #include "SensorData.h"
 #include "Sht30Fiber.h"
+#include "TftTask.h"
 #include "WifiKeepAliveTask.h"
 
 #include <FiberTask.h>
 #include <JetBrainsMono15.h>
-#include <TFT.h>
 
 #include <DallasTemperature.h>
 #include <esp_adc_cal.h>
-#include <esp_log.h>
 #include <esp_sntp.h>
 #include <OneWire.h>
 
@@ -32,7 +31,6 @@ void printAddress(DeviceAddress deviceAddress);
 String getTime();
 String postData();
 
-TFT tft;
 int vref = 1100;
 
 OneWire oneWire(ONE_WIRE_BUS);
@@ -45,6 +43,7 @@ const char* time_zone = "CET-1CEST,M3.5.0,M10.5.0/3";  // TimeZone rule for Euro
 
 SensorData sensorData;
 
+TftTask tftTask(16);
 WifiKeepAliveTask wifiTask;
 FiberTask fiberTask1(1000, "FiberTask0", 8192, 10, Task::Core::Core1);
 Sht30Fiber sht30Fiber(sensorData);
@@ -54,12 +53,13 @@ void setup(void) {
   Serial.begin(115200);
   Serial.println();
 
-  tft.init();
-  tft.loadFont(JetBrainsMono15);
-  tft.setRotation(3);
-  tft.fillScreen(Color::Black);
+  tftTask.send([] (Tft &tft) {
+    tft.loadFont(JetBrainsMono15);
+    tft.setRotation(3);
+    tft.fillScreen(Color::Black);
+  });
 
-  tft.drawString("Init ADC...               ", {0, 0});
+  Serial.println("Init ADC...");
   esp_adc_cal_characteristics_t adc_chars;
   esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);    //Check type of calibration value used to characterize ADC
   if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
@@ -71,7 +71,7 @@ void setup(void) {
       Serial.println("Default Vref: 1100mV");
   }
 
-  tft.drawString("Init Temp Sensors...      ", {0, 0});
+  Serial.println("Init Temp Sensors...");
   sensors.begin();
   numberOfDevices = sensors.getDeviceCount();
   Serial.print("Locating devices...");
@@ -95,19 +95,19 @@ void setup(void) {
   }
 
 
-  tft.drawString("Init Buttons...           ", {0, 0});
+  Serial.println("Init Buttons...");
   pinMode(BUTTON_1, INPUT_PULLUP);
   pinMode(BUTTON_2, INPUT_PULLUP);
 
-  tft.drawString("Connect WIFI...           ", {0, 0});
+  Serial.println("Connect WIFI...");
   sntp_servermode_dhcp(0);
   configTzTime(time_zone, ntpServer);
 
-  tft.drawString("Initialization completed. ", {0, 0});
-  tft.fillScreen(Color::Black);
+  Serial.println("Initialization completed.");
 
   fiberTask1.addFiber(sht30Fiber);
 
+  tftTask.start();
   wifiTask.start();
   fiberTask1.start();
   httpPostTask.start();
@@ -117,7 +117,6 @@ unsigned long lastDuration = 0;
 unsigned long lastDelay = 0;
 unsigned long lastStart = 0;
 void loop() {
-  tft.drawRect(tft.size() - Vector2i{1,1}, Vector2i{1,1}, Color::White);
   const unsigned long start = millis();
   const unsigned long loopTime = start - lastStart;
   lastStart = start;
@@ -156,34 +155,36 @@ void loop() {
   const String memoryTotal = "Mem: " + String(ESP.getHeapSize()) + "       ";
   const String memoryFree = "Fre: " + String(ESP.getFreeHeap()) + "       ";
 
-  tft.setRotation(3);
-  tft.setTextColor(Color::White, Color::Black);
-  tft.drawRect(tft.size() - Vector2i{1,1}, Vector2i{1,1}, Color::Black);
-  //tft.fillScreen(Color::Black);
+  tftTask.send([] (Tft &tft) {
+    tft.setRotation(3);
+    tft.setTextColor(Color::White, Color::Black);
+    //tft.fillScreen(Color::Black);
+  });
 
+  tftTask.send([=] (Tft &tft) {
+    const Vector2i shift{0, 16};
+    Vector2i pos = -shift;
 
-  const Vector2i shift{0, 16};
-  Vector2i pos = -shift;
+    tft.drawString(time, pos+=shift);
+    tft.drawString(fps, pos+=shift);
+    tft.drawString(interval, pos+=shift);
+    tft.drawString(lastDurationString, pos+=shift);
+    tft.drawString(voltageString, pos+=shift);
+    tft.drawString(sht30TemperatureString, pos+=shift);
+    tft.drawString(sht30HumidityString, pos+=shift);
+    tft.drawString(wifiStatusString, pos+=shift);
 
-  tft.drawString(time, pos+=shift);
-  tft.drawString(fps, pos+=shift);
-  tft.drawString(interval, pos+=shift);
-  tft.drawString(lastDurationString, pos+=shift);
-  tft.drawString(voltageString, pos+=shift);
-  tft.drawString(sht30TemperatureString, pos+=shift);
-  tft.drawString(sht30HumidityString, pos+=shift);
-  tft.drawString(wifiStatusString, pos+=shift);
-
-  pos = Vector2i{tft.size().x() / 2, 0} - shift;
-  tft.drawString("", pos+=shift);
-  for (const String &s : ds18b20Strings) {
-    tft.drawString(s, pos+=shift);
-  }
-  //tft.drawString(button1, pos+=shift);
-  //tft.drawString(button2, pos+=shift);
-  tft.drawString(memoryTotal, pos+=shift);
-  tft.drawString(memoryFree, pos+=shift);
-  tft.drawString(ip, pos+=shift);
+    pos = Vector2i{tft.size().x() / 2, 0} - shift;
+    tft.drawString("", pos+=shift);
+    for (const String &s : ds18b20Strings) {
+      tft.drawString(s, pos+=shift);
+    }
+    //tft.drawString(button1, pos+=shift);
+    //tft.drawString(button2, pos+=shift);
+    tft.drawString(memoryTotal, pos+=shift);
+    tft.drawString(memoryFree, pos+=shift);
+    tft.drawString(ip, pos+=shift);
+  });
 
   const int desiredInterval = 1000;
   lastDuration = millis() - start;

@@ -3,7 +3,7 @@
 #include <HTTPClient.h>
 
 HttpPostTask::HttpPostTask(unsigned long interval, std::function<bool()> getWifiConnected, std::function<String()> getPostDataSource) :
-  Task(interval, "HTTP POST", 8192, 10, Core::Core0),
+  LoopTask(interval, "HTTP POST", 8192, 10, Core::Core0),
   _getWifiConnected(getWifiConnected),
   _postDataSource(getPostDataSource)
 { }
