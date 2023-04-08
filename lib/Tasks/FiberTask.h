@@ -1,11 +1,11 @@
 #pragma once
 
 #include "Fiber.h"
-#include "Task.h"
+#include "LoopTask.h"
 
 #include <vector>
 
-class FiberTask : public Task
+class FiberTask : public LoopTask
 {
 public:
   FiberTask(unsigned long interval, const char* name, uint32_t stackSize, unsigned int priority, Core core);

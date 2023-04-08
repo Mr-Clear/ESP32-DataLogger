@@ -1,7 +1,7 @@
 #include "FiberTask.h"
 
 FiberTask::FiberTask(unsigned long interval, const char* name, uint32_t stackSize, unsigned int priority, Core core) :
-  Task{interval, name, stackSize, priority, core}
+  LoopTask{interval, name, stackSize, priority, core}
 { }
 
 void FiberTask::addFiber(Fiber &fiber) {

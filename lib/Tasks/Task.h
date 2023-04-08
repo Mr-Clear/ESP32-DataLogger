@@ -11,30 +11,17 @@ public:
     Any = 0x7FFFFFFF /* tskNO_AFFINITY */
   };
 
-  struct Statistics {
-    int64_t minDuration = ULONG_MAX;
-    int64_t maxDuration = 0;
-    int64_t totalDuration = 0;
-    int64_t totalIdle = 0;
-    int64_t overtime = 0;
-    int loops = 0;
-  };
-
-  Task(unsigned long interval, const char* name, uint32_t stackSize = 4096, unsigned int priority = 10, Core core = Core::Any);
+  Task(const char* name, uint32_t stackSize = 4096, unsigned int priority = 10, Core core = Core::Any);
   virtual ~Task() = default;
   void start();
   void stop();
   bool isRunning() const;
 
-  void setInterval(unsigned long interval);
-  unsigned int getInterval();
-
 protected:
-  virtual void setup() = 0;
-  virtual void loop() = 0;
+  virtual void onStart() = 0;
+  bool isStopped();
 
 private:
-  unsigned long _interval;
   const char* _name;
   uint32_t _stackSize;
   unsigned int _priority;
@@ -42,8 +29,7 @@ private:
   volatile bool _stopped;
   volatile bool _running;
   void* _handle;
-  Statistics _statistics;
   
+  void taskStarter();
   static void taskStarter(void* task);
-  void taskLoop();
 };
