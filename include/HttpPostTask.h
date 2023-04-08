@@ -1,6 +1,7 @@
 #pragma once
 
 #include <LoopTask.h>
+#include <Queue.h>
 
 #include <WString.h>
 
@@ -11,8 +12,21 @@ class HTTPClient;
 
 class HttpPostTask : public LoopTask {
 public:
-  HttpPostTask(unsigned long interval, std::function<bool()> getWifiConnected, std::function<String()> postDataSource);
+  struct PostData {
+    unsigned long duration;
+    double voltage;
+    uint8_t sht30Error;
+    double sht30Temperature;
+    double sht30Humidity;
+    std::vector<double> ds18b20;
+  };
+
+  using DataUpdate = std::function<void(PostData &data)>;
+
+  HttpPostTask(unsigned long interval, std::function<bool()> getWifiConnected);
   ~HttpPostTask();
+
+  const Queue<DataUpdate> &dataUpdateQueue() const;
 
 protected:
   void setup() override;
@@ -20,6 +34,9 @@ protected:
 
 private:
   std::function<bool()> _getWifiConnected;
-  std::function<String()> _postDataSource;
   std::unique_ptr<HTTPClient> _httpClient;
+  PostData _data;
+  Queue<DataUpdate> _dataUpdateQueue;
+
+  String createPostData();
 };

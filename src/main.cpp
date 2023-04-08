@@ -1,5 +1,4 @@
 #include "HttpPostTask.h"
-#include "SensorData.h"
 #include "Sht30Fiber.h"
 #include "Tft.h"
 #include "WifiKeepAliveTask.h"
@@ -22,7 +21,6 @@
 
 void printAddress(DeviceAddress deviceAddress);
 String getTime();
-String postData();
 
 int vref = 1100;
 
@@ -34,13 +32,11 @@ DeviceAddress tempDeviceAddress;
 const char* ntpServer = "fritz.box";
 const char* time_zone = "CET-1CEST,M3.5.0,M10.5.0/3";  // TimeZone rule for Europe/Rome including daylight adjustment rules (optional)
 
-SensorData sensorData;
-
 Tft tft(32);
 WifiKeepAliveTask wifiTask;
 FiberTask fiberTask1(1000, "FiberTask0", 8192, 10, Task::Core::Core1);
 Sht30Fiber sht30Fiber;
-HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask), postData);
+HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
 
 void setup(void) {
   Serial.begin(115200);
@@ -104,8 +100,10 @@ void setup(void) {
   httpPostTask.start();
 
   sht30Fiber.data().addObserver( [] (const Sht30Fiber::Data &data) {
-    sensorData.sht30Temperature = data.error ? NAN : data.temperature;
-    sensorData.sht30Humidity = data.error ? NAN : data.humidity;
+    httpPostTask.dataUpdateQueue().push( [data] (HttpPostTask::PostData &postData) {
+      postData.sht30Temperature = data.error ? NAN : data.temperature;
+      postData.sht30Humidity = data.error ? NAN : data.humidity;
+    } );
 
     const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature))) + "       ";
     const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity))) + "       ";
@@ -130,8 +128,11 @@ void loop() {
   //String time = String(esp_log_timestamp() / 1000);
 
   const uint16_t v = analogRead(ADC_PIN);
-  sensorData.voltage = v / 4095.0 * 2.0 * 3.3 * (vref / 1000.0);
-  const String voltageString = "VCC: " + String(sensorData.voltage) + " V  ";
+  const double voltage = v / 4095.0 * 2.0 * 3.3 * (vref / 1000.0);
+  httpPostTask.dataUpdateQueue().push( [voltage] (HttpPostTask::PostData &postData) {
+    postData.voltage = voltage;
+  } );
+  const String voltageString = "VCC: " + String(voltage) + " V  ";
 
   const String wifiStatusString = wifiTask.wifiStatusText() + "           ";
 
@@ -145,13 +146,13 @@ void loop() {
       ds18b20Strings.emplace_back("Tm:" + String(i) + " " + String(tempC) + " °C");
     }
   }
-  sensorData.ds18b20 = ds18b20;
+  httpPostTask.dataUpdateQueue().push( [ds18b20] (HttpPostTask::PostData &postData) {
+    postData.ds18b20 = ds18b20;
+  } );
 
   const String button1 = "BT1: " + String(digitalRead(BUTTON_1) ? "Up     " : "Down ");
   const String button2 = "BT2: " + String(digitalRead(BUTTON_2) ? "Up     " : "Down ");
 
-  const String sht30TemperatureString = (sensorData.sht30Error ? ("Tmp Err: " + String(sensorData.sht30Error)) : ("Tmp: " + String(sensorData.sht30Temperature))) + "       ";
-  const String sht30HumidityString = (sensorData.sht30Error ? ("Hum Err: " + String(sensorData.sht30Error)) : ("Hum: " + String(sensorData.sht30Humidity))) + "       ";
   const String ip = wifiTask.localIp() + "      ";
 
   const String memoryTotal = "Mem: " + String(ESP.getHeapSize()) + "       ";
@@ -184,6 +185,10 @@ void loop() {
   tft.drawString(memoryFree, pos+=shift);
   tft.drawString(ip, pos+=shift);
 
+  httpPostTask.dataUpdateQueue().push( [] (HttpPostTask::PostData &postData) {
+    
+  } );
+
   const int desiredInterval = 1000;
   lastDuration = millis() - start;
   lastDelay = constrain(desiredInterval - lastDuration, 0, desiredInterval);
@@ -208,32 +213,4 @@ String getTime() {
   char buf[64];
   size_t written = strftime(buf, 64, "%a, %Y-%m-%d %H:%M:%S", &timeinfo);
   return String(buf, written);
-}
-
-String postData() {
-  String data;
-  data.reserve(1024);
-  data += "{\"args\": [\"esp32test.rrd\", \"N:";
-  data += sensorData.duration;
-  data += ":";
-  data += sensorData.voltage;
-  for (const double &v : {sensorData.sht30Temperature, sensorData.sht30Humidity})
-  {
-    data += ":";
-    if (std::isnan(v))
-      data += "U";
-    else
-      data += v;
-  }
-  for (int i = 0; i < 3; ++i)
-  {
-    data += ":";
-    if (sensorData.ds18b20.size() > i)
-      data += sensorData.ds18b20[i];
-    else
-      data += "U";
-  }
-  data += "\"]}";
-
-  return data;
 }

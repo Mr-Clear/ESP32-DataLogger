@@ -16,7 +16,7 @@ public:
         vQueueDelete(_queue);
     }
 
-    bool push(const T &data, int timeoutMs = -1) {
+    bool push(const T &data, int timeoutMs = -1) const {
         const TickType_t timeout = timeoutMs >= 0 ? timeoutMs / portTICK_PERIOD_MS : portMAX_DELAY;
         T *copy = new T(data);
         bool ret = xQueueSend(_queue, static_cast<void*>(copy), timeout) == pdPASS;
@@ -27,9 +27,13 @@ public:
     T pop(int timeoutMs = -1) {
         const TickType_t timeout = timeoutMs >= 0 ? timeoutMs / portTICK_PERIOD_MS : portMAX_DELAY;
         std::unique_ptr<T> data{_allocator.allocate(1)};
-        if (xQueueReceive( _queue, static_cast<void*>(data.get()), timeout) == pdPASS)
+        if (xQueueReceive(_queue, static_cast<void*>(data.get()), timeout) == pdPASS)
             return *data.get();
         return T{};
+    }
+
+    unsigned int messagesWaiting() const {
+        return uxQueueMessagesWaiting(_queue);
     }
 
 private:
