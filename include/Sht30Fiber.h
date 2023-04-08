@@ -1,7 +1,5 @@
 #pragma once
 
-#include "SensorData.h"
-
 #include <Fiber.h>
 #include <Observable.h>
 

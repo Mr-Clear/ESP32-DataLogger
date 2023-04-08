@@ -1,3 +1,4 @@
+#include "Ds18b20Fiber.h"
 #include "HttpPostTask.h"
 #include "Sht30Fiber.h"
 #include "Tft.h"
@@ -15,7 +16,6 @@
 #include <vector>
 
 #define ADC_PIN 34
-#define ONE_WIRE_BUS 17
 #define BUTTON_1 0
 #define BUTTON_2 35
 
@@ -24,8 +24,6 @@ String getTime();
 
 int vref = 1100;
 
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
 int numberOfDevices;
 DeviceAddress tempDeviceAddress;
 
@@ -36,15 +34,12 @@ Tft tft(32);
 WifiKeepAliveTask wifiTask;
 FiberTask fiberTask1(1000, "FiberTask0", 8192, 10, Task::Core::Core1);
 Sht30Fiber sht30Fiber;
+Ds18b20Fiber ds18b20Fiber(17);
 HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
 
 void setup(void) {
   Serial.begin(115200);
   Serial.println();
-
-  tft.loadFont(JetBrainsMono15);
-  tft.setRotation(3);
-  tft.fillScreen(Color::Black);
 
   Serial.println("Init ADC...");
   esp_adc_cal_characteristics_t adc_chars;
@@ -58,30 +53,6 @@ void setup(void) {
       Serial.println("Default Vref: 1100mV");
   }
 
-  Serial.println("Init Temp Sensors...");
-  sensors.begin();
-  numberOfDevices = sensors.getDeviceCount();
-  Serial.print("Locating devices...");
-  Serial.print("Found ");
-  Serial.print(numberOfDevices, DEC);
-  Serial.println(" devices.");
-  for(int i=0;i<numberOfDevices; i++){
-    // Search the wire for address
-    if(sensors.getAddress(tempDeviceAddress, i)) {
-      Serial.print("Found device ");
-      Serial.print(i, DEC);
-      Serial.print(" with address: ");
-      printAddress(tempDeviceAddress);
-      Serial.println();
-    } else {
-      Serial.print("Found ghost device at ");
-      Serial.print(i, DEC);
-      Serial.print(" but could not detect address. Check power and cabling");
-      Serial.println();
-    }
-  }
-
-
   Serial.println("Init Buttons...");
   pinMode(BUTTON_1, INPUT_PULLUP);
   pinMode(BUTTON_2, INPUT_PULLUP);
@@ -93,11 +64,16 @@ void setup(void) {
   Serial.println("Initialization completed.");
 
   fiberTask1.addFiber(sht30Fiber);
+  fiberTask1.addFiber(ds18b20Fiber);
 
   tft.start();
   wifiTask.start();
   fiberTask1.start();
   httpPostTask.start();
+
+  tft.loadFont(JetBrainsMono15);
+  tft.setRotation(3);
+  tft.fillScreen({4, 4, 4});
 
   sht30Fiber.data().addObserver( [] (const Sht30Fiber::Data &data) {
     httpPostTask.dataUpdateQueue().push( [data] (HttpPostTask::PostData &postData) {
@@ -110,7 +86,21 @@ void setup(void) {
     const Vector2i shift{0, 16};
     tft.drawString(tmp, shift * 5);
     tft.drawString(hum, shift * 6);
-  } );
+  });
+
+  ds18b20Fiber.data().addObserver( [] ( const std::map<String, float> &values) {
+    std::vector<double> ds18b20;
+    std::vector<String> ds18b20Strings;
+    const Vector2i shift{0, 16};
+    Vector2i pos = Vector2i{tft.size().x() / 2, 0} + shift * 0 - shift;
+    for (const auto & [address, temperature] : values) {
+      ds18b20.emplace_back(temperature);
+      tft.drawString("Tmp: " + String(temperature) + " °C", pos+=shift);
+    }
+    httpPostTask.dataUpdateQueue().push( [ds18b20] (HttpPostTask::PostData &postData) {
+      postData.ds18b20 = ds18b20;
+    } );
+  });
 }
 
 unsigned long lastDuration = 0;
@@ -136,20 +126,6 @@ void loop() {
 
   const String wifiStatusString = wifiTask.wifiStatusText() + "           ";
 
-  std::vector<double> ds18b20;
-  std::vector<String> ds18b20Strings;
-  sensors.requestTemperatures();
-  for (int i=0; i < numberOfDevices; i++) {
-    if (sensors.getAddress(tempDeviceAddress, i)) {
-      float tempC = sensors.getTempC(tempDeviceAddress);
-      ds18b20.emplace_back(tempC);
-      ds18b20Strings.emplace_back("Tm:" + String(i) + " " + String(tempC) + " °C");
-    }
-  }
-  httpPostTask.dataUpdateQueue().push( [ds18b20] (HttpPostTask::PostData &postData) {
-    postData.ds18b20 = ds18b20;
-  } );
-
   const String button1 = "BT1: " + String(digitalRead(BUTTON_1) ? "Up     " : "Down ");
   const String button2 = "BT2: " + String(digitalRead(BUTTON_2) ? "Up     " : "Down ");
 
@@ -160,7 +136,7 @@ void loop() {
 
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
-  //tft.fillScreen(Color::Black);
+  //tft.fillScreen(Color::Red);
 
   const Vector2i shift{0, 16};
   Vector2i pos = -shift;
@@ -174,11 +150,9 @@ void loop() {
   pos+=shift; //tft.drawString(sht30HumidityString, pos+=shift);
   tft.drawString(wifiStatusString, pos+=shift);
 
-  pos = Vector2i{tft.size().x() / 2, 0} - shift;
+  pos = Vector2i{tft.size().x() / 2, 0} + shift * 3 - shift;
   tft.drawString("", pos+=shift);
-  for (const String &s : ds18b20Strings) {
-    tft.drawString(s, pos+=shift);
-  }
+
   //tft.drawString(button1, pos+=shift);
   //tft.drawString(button2, pos+=shift);
   tft.drawString(memoryTotal, pos+=shift);
@@ -193,14 +167,6 @@ void loop() {
   lastDuration = millis() - start;
   lastDelay = constrain(desiredInterval - lastDuration, 0, desiredInterval);
   delay(lastDelay);
-}
-
-// function to print a device address
-void printAddress(DeviceAddress deviceAddress) {
-  for (uint8_t i = 0; i < 8; i++){
-    if (deviceAddress[i] < 16) Serial.print("0");
-      Serial.print(deviceAddress[i], HEX);
-  }
 }
 
 String getTime() {
