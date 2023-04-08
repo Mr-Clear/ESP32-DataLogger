@@ -6,6 +6,7 @@
 
 #include <FiberTask.h>
 #include <JetBrainsMono15.h>
+#include <Observable.h>
 
 #include <DallasTemperature.h>
 #include <esp_adc_cal.h>
@@ -38,7 +39,7 @@ SensorData sensorData;
 Tft tft(32);
 WifiKeepAliveTask wifiTask;
 FiberTask fiberTask1(1000, "FiberTask0", 8192, 10, Task::Core::Core1);
-Sht30Fiber sht30Fiber(sensorData);
+Sht30Fiber sht30Fiber;
 HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask), postData);
 
 void setup(void) {
@@ -101,6 +102,17 @@ void setup(void) {
   wifiTask.start();
   fiberTask1.start();
   httpPostTask.start();
+
+  sht30Fiber.data().addObserver( [] (const Sht30Fiber::Data &data) {
+    sensorData.sht30Temperature = data.error ? NAN : data.temperature;
+    sensorData.sht30Humidity = data.error ? NAN : data.humidity;
+
+    const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature))) + "       ";
+    const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity))) + "       ";
+    const Vector2i shift{0, 16};
+    tft.drawString(tmp, shift * 5);
+    tft.drawString(hum, shift * 6);
+  } );
 }
 
 unsigned long lastDuration = 0;
@@ -157,8 +169,8 @@ void loop() {
   tft.drawString(interval, pos+=shift);
   tft.drawString(lastDurationString, pos+=shift);
   tft.drawString(voltageString, pos+=shift);
-  tft.drawString(sht30TemperatureString, pos+=shift);
-  tft.drawString(sht30HumidityString, pos+=shift);
+  pos+=shift; //tft.drawString(sht30TemperatureString, pos+=shift);
+  pos+=shift; //tft.drawString(sht30HumidityString, pos+=shift);
   tft.drawString(wifiStatusString, pos+=shift);
 
   pos = Vector2i{tft.size().x() / 2, 0} - shift;
