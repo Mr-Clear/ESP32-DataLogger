@@ -3,6 +3,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
+#include <memory>
+
 template <typename T>
 class Queue {
 public:
@@ -16,17 +18,22 @@ public:
 
     bool push(const T &data, int timeoutMs = -1) {
         const TickType_t timeout = timeoutMs >= 0 ? timeoutMs / portTICK_PERIOD_MS : portMAX_DELAY;
-        return xQueueSend(_queue, static_cast<void*>(const_cast<T*>(new T(data))), timeout) == pdPASS;
+        T *copy = new T(data);
+        bool ret = xQueueSend(_queue, static_cast<void*>(copy), timeout) == pdPASS;
+        _allocator.deallocate(copy, 1);
+        return ret;
     }
 
     T pop(int timeoutMs = -1) {
         const TickType_t timeout = timeoutMs >= 0 ? timeoutMs / portTICK_PERIOD_MS : portMAX_DELAY;
-        T data;
-        if (xQueueReceive( _queue, static_cast<void*>(&data), timeout) == pdPASS)
-            return data;
+        std::unique_ptr<T> data{_allocator.allocate(1)};
+        if (xQueueReceive( _queue, static_cast<void*>(data.get()), timeout) == pdPASS)
+            return *data.get();
         return T{};
     }
 
 private:
     QueueHandle_t _queue;
+
+    static std::allocator<T> _allocator;
 };
