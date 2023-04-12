@@ -27,6 +27,7 @@ void HttpPostTask::loop() {
       const int httpResponseCode = _httpClient->POST(postDataSource);
       _httpClient->end();
     }
+    _data = PostData{};
   }
 }
 
@@ -39,9 +40,15 @@ String HttpPostTask::createPostData() {
   String data;
   data.reserve(1024);
   data += "{\"args\": [\"esp32test.rrd\", \"N:";
-  data += _data.duration;
+  if (_data.duration < 0)
+    data += "U";
+  else
+    data += _data.duration;
   data += ":";
-  data += _data.voltage;
+  if (std::isnan(_data.voltage))
+    data += "U";
+  else
+    data += _data.voltage;
   for (const double &v : {_data.sht30Temperature, _data.sht30Humidity}) {
     data += ":";
     if (std::isnan(v))

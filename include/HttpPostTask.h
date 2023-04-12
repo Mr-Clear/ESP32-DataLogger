@@ -5,6 +5,7 @@
 
 #include <WString.h>
 
+#include <cmath>
 #include <functional>
 #include <memory>
 
@@ -13,11 +14,11 @@ class HTTPClient;
 class HttpPostTask : public LoopTask {
 public:
   struct PostData {
-    unsigned long duration;
-    double voltage;
-    uint8_t sht30Error;
-    double sht30Temperature;
-    double sht30Humidity;
+    unsigned long duration = -1;
+    double voltage = NAN;
+    uint8_t sht30Error = 1;
+    double sht30Temperature = NAN;
+    double sht30Humidity = NAN;
     std::vector<double> ds18b20;
   };
 
