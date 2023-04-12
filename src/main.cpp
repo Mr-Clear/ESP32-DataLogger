@@ -1,4 +1,5 @@
 #include "Ds18b20Fiber.h"
+#include "Gpio.h"
 #include "HttpPostTask.h"
 #include "Sht30Fiber.h"
 #include "Tft.h"
@@ -53,15 +54,9 @@ void setup(void) {
       Serial.println("Default Vref: 1100mV");
   }
 
-  Serial.println("Init Buttons...");
-  pinMode(BUTTON_1, INPUT_PULLUP);
-  pinMode(BUTTON_2, INPUT_PULLUP);
-
   Serial.println("Connect WIFI...");
   sntp_servermode_dhcp(0);
   configTzTime(time_zone, ntpServer);
-
-  Serial.println("Initialization completed.");
 
   fiberTask1.addFiber(sht30Fiber);
   fiberTask1.addFiber(ds18b20Fiber);
@@ -101,6 +96,13 @@ void setup(void) {
       postData.ds18b20 = ds18b20;
     } );
   });
+
+  addGpioEvent(BUTTON_1, PinInputMode::PullUp, [] {
+    static int count = 0;
+    tft.drawString(String(++count), Vector2i{tft.size().x() / 2, 16 * 3});
+  }, PinInterruptMode::OnFalling);
+
+  tft.drawString(".", Vector2i{tft.size().x() / 2, 16 * 3});
 }
 
 unsigned long lastDuration = 0;
