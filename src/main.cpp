@@ -96,13 +96,23 @@ void setup(void) {
       postData.ds18b20 = ds18b20;
     } );
   });
+  
+  addGpioEvent(BUTTON_2, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
+    if (type == GpioEventType::Falling) {
+      const int blVal = tft.getBackLite() / 2;
+      tft.drawString(String(tft.setBackLite(blVal)) + "       ", Vector2i{tft.size().x() / 2, 16 * 3});
+    }
+  });
 
-  addGpioEvent(BUTTON_1, PinInputMode::PullUp, [] {
-    static int count = 0;
-    tft.drawString(String(++count), Vector2i{tft.size().x() / 2, 16 * 3});
-  }, PinInterruptMode::OnFalling);
+  addGpioEvent(BUTTON_1, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
+    if (type == GpioEventType::Falling) {
+      const int blVal = max(int(tft.getBackLite()) * 2, 1);
+      tft.drawString(String(tft.setBackLite(blVal)) + "       ", Vector2i{tft.size().x() / 2, 16 * 3});
+    }
+  });
 
-  tft.drawString(".", Vector2i{tft.size().x() / 2, 16 * 3});
+  tft.drawString(String(tft.getBackLite()) + "       ", Vector2i{tft.size().x() / 2, 16 * 3});
+  
 }
 
 unsigned long lastDuration = 0;
@@ -128,9 +138,6 @@ void loop() {
 
   const String wifiStatusString = wifiTask.wifiStatusText() + "           ";
 
-  const String button1 = "BT1: " + String(digitalRead(BUTTON_1) ? "Up     " : "Down ");
-  const String button2 = "BT2: " + String(digitalRead(BUTTON_2) ? "Up     " : "Down ");
-
   const String ip = wifiTask.localIp() + "      ";
 
   const String memoryTotal = "Mem: " + String(ESP.getHeapSize()) + "       ";
@@ -155,8 +162,6 @@ void loop() {
   pos = Vector2i{tft.size().x() / 2, 0} + shift * 3 - shift;
   tft.drawString("", pos+=shift);
 
-  //tft.drawString(button1, pos+=shift);
-  //tft.drawString(button2, pos+=shift);
   tft.drawString(memoryTotal, pos+=shift);
   tft.drawString(memoryFree, pos+=shift);
   tft.drawString(ip, pos+=shift);

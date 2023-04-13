@@ -1,14 +1,23 @@
 #include "Tft.h"
 
+#include "Gpio.h"
+
 #include <TFT_eSPI.h>
+
+namespace {
+constexpr uint8_t backlitePin = 4;
+constexpr uint8_t backlitePwmBits = 12;
+constexpr uint32_t backlitePwmMax = (uint32_t(1) << backlitePwmBits) - 1;
+}
 
 Tft::Tft(unsigned int queSize, const char* name, uint32_t stackSize, unsigned int priority, Core core) :
   QueueTask(queSize, name, stackSize, priority, core),
-  _tft(new TFT_eSPI{}) {
-  _rotation = _tft->getRotation();
-}
+  _tft(new TFT_eSPI{}) { }
 
-Tft::~Tft() = default;
+Tft::~Tft() {
+  ledcDetachPin(backlitePin);
+  freeLedChannel(_backliteChannel);
+}
 
 const Vector2i &Tft::size() {
   if (getRotation() % 2)
@@ -66,8 +75,34 @@ void Tft::drawString(const String &string, const Vector2i &position) {
   send([string, position] (TFT_eSPI &tft) { tft.drawString(string, position.x(), position.y()); });
 }
 
+uint32_t Tft::setBackLite(uint32_t level) {
+  const uint32_t lvl = constrain(level, 0, backlitePwmMax);
+  if (lvl == 0) {
+    send([] (TFT_eSPI &tft) {
+      tft.writecommand(ST7789_DISPOFF);
+      tft.writecommand(ST7789_SLPIN);
+    });
+  } else if (getBackLite() == 0) {
+    send([] (TFT_eSPI &tft) {
+      tft.writecommand(ST7789_SLPOUT);
+      tft.writecommand(ST7789_DISPON);
+    });
+  }
+  ledcWrite(_backliteChannel, lvl);
+  return lvl;
+}
+
+uint32_t Tft::getBackLite() const {
+  return ledcRead(_backliteChannel);
+}
+
 void Tft::setup() {
-  send([] (TFT_eSPI &tft) { tft.init(); });
+  _tft->init();
+  _rotation = _tft->getRotation();
+  _backliteChannel = reserveLedChannel();
+  ledcSetup(_backliteChannel, 5000, backlitePwmBits);
+  ledcAttachPin(backlitePin, _backliteChannel);
+  setBackLite((backlitePwmMax + 1) / 4);
 }
 
 void Tft::handleMessage(const TftJob &job) {

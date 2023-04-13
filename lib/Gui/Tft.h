@@ -35,12 +35,17 @@ public:
   void drawString(const char *string, const Vector2i &position);
   void drawString(const String &string, const Vector2i &position);
 
+  uint32_t setBackLite(uint32_t level);
+  uint32_t getBackLite() const;
+
 private:
   std::unique_ptr<TFT_eSPI> _tft;
-  std::atomic<uint8_t> _rotation;
+  std::atomic<uint8_t> _rotation = -1;
 
   const Vector2i _size{135, 240};
   const Vector2i _sizeR{~_size};
+
+  int _backliteChannel = -1;
 
   void setup() override;
   void handleMessage(const TftJob &data) override;

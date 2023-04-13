@@ -3,6 +3,8 @@
 #include <esp32-hal-gpio.h>
 #include <FunctionalInterrupt.h>
 
+#include <set>
+
 namespace {
 
     uint8_t decodePinInputMode(PinInputMode mode) {
@@ -17,7 +19,7 @@ namespace {
         }
     }
 
-    uint8_t decodePinInterruptMode(PinInterruptMode mode) {
+    constexpr uint8_t decodePinInterruptMode(PinInterruptMode mode) {
         switch (mode)
         {
         case PinInterruptMode::OnRising:
@@ -39,17 +41,32 @@ namespace {
         }
     }
 
+    std::set<int> freeLedChannels{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 ,15};
+
 } // namespace
 
-
-void addGpioEvent(uint8_t pin, PinInputMode inputMode, std::function<void()> event, PinInterruptMode interruptMode, int debounceTime) {
+void addGpioEvent(uint8_t pin, PinInputMode inputMode, GpioEvent event, int debounceTime) {
     pinMode(pin, decodePinInputMode(inputMode));
-    attachInterrupt(pin, [event, debounceTime] {
+    attachInterrupt(pin, [pin, event, debounceTime] {
         static int count = 0;
         static long lastPress = 0;
         const long now = millis();
+        const GpioEventType type = digitalRead(pin) ? GpioEventType::Rising : GpioEventType::Falling;
         if (now - lastPress > debounceTime)
-            event();
+            event(pin, type);
         lastPress = now;
-    }, decodePinInterruptMode(interruptMode));
+    }, decodePinInterruptMode(PinInterruptMode::OnChange));
+}
+
+int reserveLedChannel() {
+    auto begin = freeLedChannels.begin();
+    if (begin == freeLedChannels.end())
+        return -1;
+    int channel = *begin;
+    freeLedChannels.erase(begin);
+    return channel;
+}
+
+void freeLedChannel(int channel) {
+    freeLedChannels.emplace(channel);
 }
