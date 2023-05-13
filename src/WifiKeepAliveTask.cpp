@@ -20,7 +20,9 @@ namespace {
 
 WifiKeepAliveTask::WifiKeepAliveTask() :
   LoopTask(1000, "WIFI Keep Alive", 4096, 10, Core::Core0)
-{ }
+{
+  _localIp = WiFi.localIP();
+}
 
 WifiKeepAliveTask::~WifiKeepAliveTask() = default;
 
@@ -40,8 +42,12 @@ String WifiKeepAliveTask::wifiStatusText() {
   return wifiStatusToString(WiFi.status());
 }
 
-String WifiKeepAliveTask::localIp() {
-  return WiFi.localIP().toString();
+const Observable<int> &WifiKeepAliveTask::wifiStatus() {
+  return _wifiStatus;
+}
+
+const Observable<IPAddress> &WifiKeepAliveTask::localIp() {
+  return _localIp;
 }
 
 String WifiKeepAliveTask::wifiStatusToString(int status) {
@@ -61,12 +67,20 @@ String WifiKeepAliveTask::wifiStatusToString(int status) {
 void WifiKeepAliveTask::setup() {
   WiFi.onEvent([this] (WiFiEvent_t event, WiFiEventInfo_t info) { onConnected(*this, event, info); }, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
   WiFi.onEvent([this] (WiFiEvent_t event, WiFiEventInfo_t info) { onDisconnected(*this, event, info); }, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+  WiFi.onEvent([this] (WiFiEvent_t event, WiFiEventInfo_t info) { 
+    _localIp = info.got_ip.ip_info.ip.addr;
+   }, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
+  WiFi.onEvent([this] (WiFiEvent_t event, WiFiEventInfo_t info) { 
+    _localIp = 0u;
+   }, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_LOST_IP);
+  WiFi.onEvent([this] (WiFiEvent_t event, WiFiEventInfo_t info) { 
+    _wifiStatus = WiFi.status();
+   });
 
   connectWifi();
 }
 
 void WifiKeepAliveTask::loop() {
-  return;
   unsigned long currentMillis = millis();
   if (!isWifiConnected() && (currentMillis - _lastReconnect >= _reconnectInterval)) {
     ESP_LOGW(TAG, "WIFI connection lost, reconnecting.");

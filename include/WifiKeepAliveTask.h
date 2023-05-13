@@ -1,6 +1,9 @@
 #pragma once
 
-#include "LoopTask.h"
+#include <LoopTask.h>
+#include <Observable.h>
+
+#include <IPAddress.h>
 
 #include <WString.h>
 
@@ -12,7 +15,9 @@ public:
   void connectWifi();
   bool isWifiConnected();
   String wifiStatusText();
-  String localIp();
+
+  const Observable<int> &wifiStatus();
+  const Observable<IPAddress> &localIp();
 
   static String wifiStatusToString(int status);
 
@@ -23,4 +28,7 @@ protected:
 private:
   unsigned long _lastReconnect;
   unsigned long _reconnectInterval = 5000;
+
+  Observable<int> _wifiStatus;
+  Observable<IPAddress> _localIp;
 };

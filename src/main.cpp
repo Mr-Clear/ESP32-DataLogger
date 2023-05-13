@@ -79,7 +79,8 @@ void setup(void) {
   for (ValueTask *valueTask : valueTasks) {
     valueTask->start();
   }
-  vSemaphoreCreateBinary(valuesSemaphore);
+  Serial.println(valueTasks.size());
+  valuesSemaphore = xSemaphoreCreateCounting(valueTasks.size(), 0);
 
   tft.loadFont(JetBrainsMono15);
   tft.setRotation(3);
@@ -121,6 +122,18 @@ void setup(void) {
     tft.drawString(memoryTotal, {120, 64});
     tft.drawString(memoryFree, {120, 80});
   });
+
+  wifiTask.localIp().addObserver( [] (const IPAddress &ip) {
+    tft.setTextColor(Color::White, Color::Black);
+    const String ips = ip.toString() + "      ";
+    tft.drawString(ips, {120, 96});
+  }, true);
+
+  wifiTask.wifiStatus().addObserver( [] (const int &status) {
+    tft.setTextColor(Color::White, Color::Black);
+    const String wifiStatusString = wifiTask.wifiStatusToString(status) + "           ";
+    tft.drawString(wifiStatusString, {0, 112});
+  }, true);
   
   addGpioEvent(BUTTON_2, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
     if (type == GpioEventType::Falling) {
@@ -171,10 +184,6 @@ void loop() {
   } );
   const String voltageString = "VCC: " + String(voltage) + " V  ";
 
-  const String wifiStatusString = wifiTask.wifiStatusText() + "           ";
-
-  const String ip = wifiTask.localIp() + "      ";
-
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
 
@@ -186,16 +195,6 @@ void loop() {
   tft.drawString(interval, pos+=shift);
   tft.drawString(lastDurationString, pos+=shift);
   tft.drawString(voltageString, pos+=shift);
-  pos+=shift; //tft.drawString(sht30TemperatureString, pos+=shift);
-  pos+=shift; //tft.drawString(sht30HumidityString, pos+=shift);
-  tft.drawString(wifiStatusString, pos+=shift);
-
-  pos = Vector2i{tft.size().x() / 2, 0} + shift * 3 - shift;
-  tft.drawString("", pos+=shift);
-
-  pos+=shift;
-  pos+=shift;
-  tft.drawString(ip, pos+=shift);
 
   httpPostTask.dataUpdateQueue().push( [] (HttpPostTask::PostData &postData) {
     

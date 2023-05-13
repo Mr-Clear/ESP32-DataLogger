@@ -27,8 +27,10 @@ public:
         return _value;
     }
 
-    void addObserver(Observer observer) const {
+    void addObserver(Observer observer, bool instantCall = false) const {
         _observers.emplace_back(observer);
+        if (instantCall)
+            observer(_value);
     }
 
 private:
