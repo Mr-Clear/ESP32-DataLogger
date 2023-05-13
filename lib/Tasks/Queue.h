@@ -46,3 +46,37 @@ private:
 
     static std::allocator<T> _allocator;
 };
+
+class VoidQueue {
+public:
+    VoidQueue(int size) :
+        _queue(xQueueCreate(size, 0))
+    { }
+
+    ~VoidQueue() {
+        vQueueDelete(_queue);
+    }
+
+    bool push(int timeoutMs = -1) const {
+        bool ret;
+        if (xPortInIsrContext()) {
+            ret = xQueueSendFromISR(_queue, nullptr, 0) == pdPASS;
+        } else {
+            const TickType_t timeout = timeoutMs >= 0 ? timeoutMs / portTICK_PERIOD_MS : portMAX_DELAY;
+            ret = xQueueSend(_queue, nullptr, timeout) == pdPASS;
+        }
+        return ret;
+    }
+
+    void pop(int timeoutMs = -1) {
+        const TickType_t timeout = timeoutMs >= 0 ? timeoutMs / portTICK_PERIOD_MS : portMAX_DELAY;
+        xQueueReceive(_queue, nullptr, timeout);
+    }
+
+    unsigned int messagesWaiting() const {
+        return uxQueueMessagesWaiting(_queue);
+    }
+
+private:
+    QueueHandle_t _queue;
+};

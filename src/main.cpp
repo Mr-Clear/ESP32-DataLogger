@@ -2,10 +2,11 @@
 #include "Gpio.h"
 #include "HttpPostTask.h"
 #include "Sht30Fiber.h"
+#include "SystemDataFiber.h"
 #include "Tft.h"
 #include "WifiKeepAliveTask.h"
 
-#include <FiberTask.h>
+#include <FiberQueueTask.h>
 #include <JetBrainsMono15.h>
 #include <Observable.h>
 
@@ -13,6 +14,7 @@
 #include <esp_adc_cal.h>
 #include <esp_sntp.h>
 #include <OneWire.h>
+#include <freertos/semphr.h>
 
 #include <vector>
 
@@ -33,10 +35,18 @@ const char* time_zone = "CET-1CEST,M3.5.0,M10.5.0/3";  // TimeZone rule for Euro
 
 Tft tft(32);
 WifiKeepAliveTask wifiTask;
-FiberTask fiberTask1(1000, "FiberTask0", 8192, 10, Task::Core::Core1);
+
+FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
 Sht30Fiber sht30Fiber;
 Ds18b20Fiber ds18b20Fiber(17);
+SystemDataFiber systemDataFiber;
+
 HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
+
+using Callback = std::function<void()>;
+using ValueTask = QueueTask<Callback>;
+std::vector<ValueTask*> valueTasks{&fiberQueueTask1};
+SemaphoreHandle_t valuesSemaphore;
 
 void setup(void) {
   Serial.begin(115200);
@@ -58,13 +68,18 @@ void setup(void) {
   sntp_servermode_dhcp(0);
   configTzTime(time_zone, ntpServer);
 
-  fiberTask1.addFiber(sht30Fiber);
-  fiberTask1.addFiber(ds18b20Fiber);
+  fiberQueueTask1.addFiber(sht30Fiber);
+  fiberQueueTask1.addFiber(ds18b20Fiber);
+  fiberQueueTask1.addFiber(systemDataFiber);
 
   tft.start();
   wifiTask.start();
-  fiberTask1.start();
   httpPostTask.start();
+
+  for (ValueTask *valueTask : valueTasks) {
+    valueTask->start();
+  }
+  vSemaphoreCreateBinary(valuesSemaphore);
 
   tft.loadFont(JetBrainsMono15);
   tft.setRotation(3);
@@ -79,6 +94,7 @@ void setup(void) {
     const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature))) + "       ";
     const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity))) + "       ";
     const Vector2i shift{0, 16};
+    tft.setTextColor(Color::White, Color::Black);
     tft.drawString(tmp, shift * 5);
     tft.drawString(hum, shift * 6);
   });
@@ -90,16 +106,26 @@ void setup(void) {
     Vector2i pos = Vector2i{tft.size().x() / 2, 0} + shift * 0 - shift;
     for (const auto & [address, temperature] : values) {
       ds18b20.emplace_back(temperature);
+      tft.setTextColor(Color::White, Color::Black);
       tft.drawString("Tmp: " + String(temperature) + " °C", pos+=shift);
     }
     httpPostTask.dataUpdateQueue().push( [ds18b20] (HttpPostTask::PostData &postData) {
       postData.ds18b20 = ds18b20;
     } );
   });
+
+  systemDataFiber.data().addObserver( [] (const SystemDataFiber::Data &values) {
+    tft.setTextColor(Color::White, Color::Black);
+    const String memoryTotal = "Mem: " + String(ESP.getHeapSize()) + "       ";
+    const String memoryFree = "Fre: " + String(ESP.getFreeHeap()) + "       ";
+    tft.drawString(memoryTotal, {120, 64});
+    tft.drawString(memoryFree, {120, 80});
+  });
   
   addGpioEvent(BUTTON_2, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
     if (type == GpioEventType::Falling) {
       const int blVal = tft.getBackLite() / 2;
+      tft.setTextColor(Color::White, Color::Black);
       tft.drawString(String(tft.setBackLite(blVal)) + "       ", Vector2i{tft.size().x() / 2, 16 * 3});
     }
   });
@@ -107,12 +133,12 @@ void setup(void) {
   addGpioEvent(BUTTON_1, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
     if (type == GpioEventType::Falling) {
       const int blVal = max(int(tft.getBackLite()) * 2, 1);
+      tft.setTextColor(Color::White, Color::Black);
       tft.drawString(String(tft.setBackLite(blVal)) + "       ", Vector2i{tft.size().x() / 2, 16 * 3});
     }
   });
 
   tft.drawString(String(tft.getBackLite()) + "       ", Vector2i{tft.size().x() / 2, 16 * 3});
-  
 }
 
 unsigned long lastDuration = 0;
@@ -122,6 +148,15 @@ void loop() {
   const unsigned long start = millis();
   const unsigned long loopTime = start - lastStart;
   lastStart = start;
+  
+  for (ValueTask *valueTask : valueTasks) {
+    valueTask->send([]{ xSemaphoreGive(valuesSemaphore); });
+  }
+  
+  for (int i = 0; i < valueTasks.size(); i++) {
+    xSemaphoreTake(valuesSemaphore, portMAX_DELAY);
+  }
+
   const String interval = "Itr: " + String(loopTime) + " ms  ";
   const String fps = "FPS: " + String(1000.0 / loopTime);
   const String lastDurationString = "Dur: " + String(lastDuration) + " ms  ";
@@ -140,12 +175,8 @@ void loop() {
 
   const String ip = wifiTask.localIp() + "      ";
 
-  const String memoryTotal = "Mem: " + String(ESP.getHeapSize()) + "       ";
-  const String memoryFree = "Fre: " + String(ESP.getFreeHeap()) + "       ";
-
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
-  //tft.fillScreen(Color::Red);
 
   const Vector2i shift{0, 16};
   Vector2i pos = -shift;
@@ -162,8 +193,8 @@ void loop() {
   pos = Vector2i{tft.size().x() / 2, 0} + shift * 3 - shift;
   tft.drawString("", pos+=shift);
 
-  tft.drawString(memoryTotal, pos+=shift);
-  tft.drawString(memoryFree, pos+=shift);
+  pos+=shift;
+  pos+=shift;
   tft.drawString(ip, pos+=shift);
 
   httpPostTask.dataUpdateQueue().push( [] (HttpPostTask::PostData &postData) {

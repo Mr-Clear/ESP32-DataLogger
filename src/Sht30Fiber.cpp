@@ -2,7 +2,6 @@
 
 #include <SHT3x.h>
 
-
 bool Sht30Fiber::Data::operator==(const Data &o) const {
   return temperature == o.temperature && humidity == o.humidity && error == o.error;
 }

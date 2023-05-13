@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Arduino.h>
 #include <cmath>
 #include <type_traits>
 
@@ -127,6 +128,17 @@ public:
 
     Vector2<T> rotate(double angle) noexcept {
         return *this = this->rotated(angle);
+    }
+
+    operator String() const {
+        String s;
+        s.reserve(10);
+        s += '(';
+        s += _x;
+        s += 'x';
+        s += _y;
+        s += ')';
+        return s;
     }
 
     static constexpr Vector2<T> fromDirLen(double direction, double length) {

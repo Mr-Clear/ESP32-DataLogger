@@ -13,6 +13,7 @@ public:
     float temperature;
     float humidity;
     int error;
+    
     bool operator==(const Data &o) const;
     bool operator!=(const Data &o) const;
   };

@@ -5,5 +5,6 @@ protected:
   virtual void setup() = 0;
   virtual void loop() = 0;
   
-  friend class FiberTask;
+  friend class FiberLoopTask;
+  friend class FiberQueueTask;
 };
