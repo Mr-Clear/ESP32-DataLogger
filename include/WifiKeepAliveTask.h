@@ -14,9 +14,9 @@ public:
 
   void connectWifi();
   bool isWifiConnected();
-  String wifiStatusText();
 
   const Observable<int> &wifiStatus();
+  const Observable<String> &wifiStatusText();
   const Observable<IPAddress> &localIp();
 
   static String wifiStatusToString(int status);
@@ -29,6 +29,7 @@ private:
   unsigned long _lastReconnect;
   unsigned long _reconnectInterval = 5000;
 
-  Observable<int> _wifiStatus;
-  Observable<IPAddress> _localIp;
+  ObservableValue<int> _wifiStatus;
+  ObservableFilter<int, String> _wifiStatusText;
+  ObservableValue<IPAddress> _localIp;
 };

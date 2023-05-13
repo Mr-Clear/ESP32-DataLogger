@@ -32,8 +32,8 @@ protected:
 
 private:
   std::unique_ptr<SHT3x> _sensor;
-  Observable<Data> _data;
-  Observable<float> _temperature;
-  Observable<float> _humidity;
-  Observable<uint8_t> _error;
+  ObservableValue<Data> _data;
+  ObservableValue<float> _temperature;
+  ObservableValue<float> _humidity;
+  ObservableValue<uint8_t> _error;
 };

@@ -129,9 +129,9 @@ void setup(void) {
     tft.drawString(ips, {120, 96});
   }, true);
 
-  wifiTask.wifiStatus().addObserver( [] (const int &status) {
+  wifiTask.wifiStatusText().addObserver( [] (const String &status) {
     tft.setTextColor(Color::White, Color::Black);
-    const String wifiStatusString = wifiTask.wifiStatusToString(status) + "           ";
+    const String wifiStatusString = status + "           ";
     tft.drawString(wifiStatusString, {0, 112});
   }, true);
   

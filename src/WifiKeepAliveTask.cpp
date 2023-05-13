@@ -19,7 +19,8 @@ namespace {
 }
 
 WifiKeepAliveTask::WifiKeepAliveTask() :
-  LoopTask(1000, "WIFI Keep Alive", 4096, 10, Core::Core0)
+  LoopTask(1000, "WIFI Keep Alive", 4096, 10, Core::Core0),
+  _wifiStatusText(_wifiStatus, &WifiKeepAliveTask::wifiStatusToString)
 {
   _localIp = WiFi.localIP();
 }
@@ -37,13 +38,12 @@ void WifiKeepAliveTask::connectWifi() {
 bool WifiKeepAliveTask::isWifiConnected() {
   return WiFi.status() == WL_CONNECTED;
 }
-
-String WifiKeepAliveTask::wifiStatusText() {
-  return wifiStatusToString(WiFi.status());
-}
-
 const Observable<int> &WifiKeepAliveTask::wifiStatus() {
   return _wifiStatus;
+}
+
+const Observable<String> &WifiKeepAliveTask::wifiStatusText() {
+  return _wifiStatusText;
 }
 
 const Observable<IPAddress> &WifiKeepAliveTask::localIp() {

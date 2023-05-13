@@ -24,6 +24,6 @@ protected:
 private:
   std::unique_ptr<OneWire> _oneWire;
   std::unique_ptr<DallasTemperature> _sensors;
-  Observable<std::map<String, float>> _data;
+  ObservableValue<std::map<String, float>> _data;
   uint8_t _pin;
 };

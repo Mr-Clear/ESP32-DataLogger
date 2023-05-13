@@ -29,7 +29,7 @@ protected:
   void loop() override;
 
 private:
-  Observable<Data> _data;
-  Observable<uint32_t> _heapSize;
-  Observable<uint32_t> _freeHeap;
+  ObservableValue<Data> _data;
+  ObservableValue<uint32_t> _heapSize;
+  ObservableValue<uint32_t> _freeHeap;
 };
