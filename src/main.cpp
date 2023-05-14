@@ -22,6 +22,9 @@
 #define BUTTON_1 0
 #define BUTTON_2 35
 
+constexpr const Vector2i displayTiling{120, 16};
+#define POS(x, y) displayTiling * Vector2i(x, y)
+
 void printAddress(DeviceAddress deviceAddress);
 String getTime();
 
@@ -94,21 +97,20 @@ void setup(void) {
 
     const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature))) + "       ";
     const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity))) + "       ";
-    const Vector2i shift{0, 16};
     tft.setTextColor(Color::White, Color::Black);
-    tft.drawString(tmp, shift * 5);
-    tft.drawString(hum, shift * 6);
+    tft.drawString(tmp, POS(0, 5));
+    tft.drawString(hum, POS(0, 6));
   });
 
   ds18b20Fiber.data().addObserver( [] ( const std::map<String, float> &values) {
     std::vector<double> ds18b20;
     std::vector<String> ds18b20Strings;
-    const Vector2i shift{0, 16};
-    Vector2i pos = Vector2i{tft.size().x() / 2, 0} + shift * 0 - shift;
+    int row = 0;
     for (const auto & [address, temperature] : values) {
       ds18b20.emplace_back(temperature);
       tft.setTextColor(Color::White, Color::Black);
-      tft.drawString("Tmp: " + String(temperature) + " °C", pos+=shift);
+      tft.drawString("Tmp: " + String(temperature) + " °C", POS(1, row));
+      ++row;
     }
     httpPostTask.dataUpdateQueue().push( [ds18b20] (HttpPostTask::PostData &postData) {
       postData.ds18b20 = ds18b20;
@@ -119,27 +121,27 @@ void setup(void) {
     tft.setTextColor(Color::White, Color::Black);
     const String memoryTotal = "Mem: " + String(ESP.getHeapSize()) + "       ";
     const String memoryFree = "Fre: " + String(ESP.getFreeHeap()) + "       ";
-    tft.drawString(memoryTotal, {120, 64});
-    tft.drawString(memoryFree, {120, 80});
+    tft.drawString(memoryTotal, POS(1, 4));
+    tft.drawString(memoryFree, POS(1, 5));
   });
 
   wifiTask.localIp().addObserver( [] (const IPAddress &ip) {
     tft.setTextColor(Color::White, Color::Black);
     const String ips = ip.toString() + "      ";
-    tft.drawString(ips, {120, 96});
+    tft.drawString(ips, POS(1, 6));
   }, true);
 
   wifiTask.wifiStatusText().addObserver( [] (const String &status) {
     tft.setTextColor(Color::White, Color::Black);
     const String wifiStatusString = status + "           ";
-    tft.drawString(wifiStatusString, {0, 112});
+    tft.drawString(wifiStatusString, POS(0, 7));
   }, true);
   
   addGpioEvent(BUTTON_2, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
     if (type == GpioEventType::Falling) {
       const int blVal = tft.getBackLite() / 2;
       tft.setTextColor(Color::White, Color::Black);
-      tft.drawString(String(tft.setBackLite(blVal)) + "       ", Vector2i{tft.size().x() / 2, 16 * 3});
+      tft.drawString(String(tft.setBackLite(blVal)) + "       ", POS(1, 3));
     }
   });
 
@@ -147,11 +149,11 @@ void setup(void) {
     if (type == GpioEventType::Falling) {
       const int blVal = max(int(tft.getBackLite()) * 2, 1);
       tft.setTextColor(Color::White, Color::Black);
-      tft.drawString(String(tft.setBackLite(blVal)) + "       ", Vector2i{tft.size().x() / 2, 16 * 3});
+      tft.drawString(String(tft.setBackLite(blVal)) + "       ", POS(1, 3));
     }
   });
 
-  tft.drawString(String(tft.getBackLite()) + "       ", Vector2i{tft.size().x() / 2, 16 * 3});
+  tft.drawString(String(tft.getBackLite()) + "       ", POS(1, 3));
 }
 
 unsigned long lastDuration = 0;
@@ -187,14 +189,11 @@ void loop() {
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
 
-  const Vector2i shift{0, 16};
-  Vector2i pos = -shift;
-
-  tft.drawString(time, pos+=shift);
-  tft.drawString(fps, pos+=shift);
-  tft.drawString(interval, pos+=shift);
-  tft.drawString(lastDurationString, pos+=shift);
-  tft.drawString(voltageString, pos+=shift);
+  tft.drawString(time, POS(0, 0));
+  tft.drawString(fps, POS(0, 1));
+  tft.drawString(interval, POS(0, 2));
+  tft.drawString(lastDurationString, POS(0, 3));
+  tft.drawString(voltageString, POS(0, 4));
 
   httpPostTask.dataUpdateQueue().push( [] (HttpPostTask::PostData &postData) {
     

@@ -57,8 +57,8 @@ public:
     }
 
     [[nodiscard]]
-    constexpr T operator*(const Vector2<T> &o) const noexcept {
-        return _x * o._x + _y * o._y;
+    constexpr Vector2<T> operator*(const Vector2<T> &o) const noexcept {
+        return {_x * o._x, _y * o._y};
     }
 
     [[nodiscard]]
