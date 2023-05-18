@@ -1,3 +1,4 @@
+#include "AdcFiber.h"
 #include "Ds18b20Fiber.h"
 #include "Gpio.h"
 #include "HttpPostTask.h"
@@ -11,7 +12,6 @@
 #include <Observable.h>
 
 #include <DallasTemperature.h>
-#include <esp_adc_cal.h>
 #include <esp_sntp.h>
 #include <OneWire.h>
 #include <freertos/semphr.h>
@@ -28,8 +28,6 @@ constexpr const Vector2i displayTiling{120, 16};
 void printAddress(DeviceAddress deviceAddress);
 String getTime();
 
-int vref = 1100;
-
 int numberOfDevices;
 DeviceAddress tempDeviceAddress;
 
@@ -40,6 +38,7 @@ Tft tft(32);
 WifiKeepAliveTask wifiTask;
 
 FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
+AdcFiber adcFiber;
 Sht30Fiber sht30Fiber;
 Ds18b20Fiber ds18b20Fiber(17);
 SystemDataFiber systemDataFiber;
@@ -55,22 +54,11 @@ void setup(void) {
   Serial.begin(115200);
   Serial.println();
 
-  Serial.println("Init ADC...");
-  esp_adc_cal_characteristics_t adc_chars;
-  esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);    //Check type of calibration value used to characterize ADC
-  if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
-      Serial.printf("eFuse Vref:%u mV", adc_chars.vref);
-      vref = adc_chars.vref;
-  } else if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
-      Serial.printf("Two Point --> coeff_a:%umV coeff_b:%umV\n", adc_chars.coeff_a, adc_chars.coeff_b);
-  } else {
-      Serial.println("Default Vref: 1100mV");
-  }
-
   Serial.println("Connect WIFI...");
   sntp_servermode_dhcp(0);
   configTzTime(time_zone, ntpServer);
 
+  fiberQueueTask1.addFiber(adcFiber);
   fiberQueueTask1.addFiber(sht30Fiber);
   fiberQueueTask1.addFiber(ds18b20Fiber);
   fiberQueueTask1.addFiber(systemDataFiber);
@@ -88,6 +76,15 @@ void setup(void) {
   tft.loadFont(JetBrainsMono15);
   tft.setRotation(3);
   tft.fillScreen({4, 4, 4});
+
+  adcFiber.channel(ADC_PIN).addObserver([] (double v) {
+    const double voltage = v * 2.0;
+    httpPostTask.dataUpdateQueue().push( [voltage] (HttpPostTask::PostData &postData) {
+      postData.voltage = voltage;
+    } );
+    const String voltageString = "VCC: " + String(voltage) + " V  ";
+    tft.drawString(voltageString, POS(0, 4));
+  });
 
   sht30Fiber.data().addObserver( [] (const Sht30Fiber::Data &data) {
     httpPostTask.dataUpdateQueue().push( [data] (HttpPostTask::PostData &postData) {
@@ -179,13 +176,6 @@ void loop() {
   const String time = getTime() + "               ";
   //String time = String(esp_log_timestamp() / 1000);
 
-  const uint16_t v = analogRead(ADC_PIN);
-  const double voltage = v / 4095.0 * 2.0 * 3.3 * (vref / 1000.0);
-  httpPostTask.dataUpdateQueue().push( [voltage] (HttpPostTask::PostData &postData) {
-    postData.voltage = voltage;
-  } );
-  const String voltageString = "VCC: " + String(voltage) + " V  ";
-
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
 
@@ -193,7 +183,6 @@ void loop() {
   tft.drawString(fps, POS(0, 1));
   tft.drawString(interval, POS(0, 2));
   tft.drawString(lastDurationString, POS(0, 3));
-  tft.drawString(voltageString, POS(0, 4));
 
   httpPostTask.dataUpdateQueue().push( [] (HttpPostTask::PostData &postData) {
     
