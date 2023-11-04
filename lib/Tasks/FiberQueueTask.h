@@ -12,5 +12,5 @@ public:
 
 private:
     void setup() override;
-    void handleMessage(const Callback &callback) override;
+    bool handleMessage(const Callback &callback) override;
 };

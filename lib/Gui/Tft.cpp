@@ -105,6 +105,7 @@ void Tft::setup() {
   setBackLite((backlitePwmMax + 1) / 4);
 }
 
-void Tft::handleMessage(const TftJob &job) {
+bool Tft::handleMessage(const TftJob &job) {
   job(*_tft.get());
+  return true;
 }

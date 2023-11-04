@@ -48,5 +48,5 @@ private:
   int _backliteChannel = -1;
 
   void setup() override;
-  void handleMessage(const TftJob &data) override;
+  bool handleMessage(const TftJob &data) override;
 };

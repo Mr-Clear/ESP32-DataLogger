@@ -11,9 +11,10 @@ void FiberQueueTask::setup() {
     }
 }
 
-void FiberQueueTask::handleMessage(const FiberQueueTask::Callback &callback) {
+bool FiberQueueTask::handleMessage(const FiberQueueTask::Callback &callback) {
     for (Fiber *fiber : fibers()) {
         fiber->loop();
     }
     callback();
+    return true;
 }

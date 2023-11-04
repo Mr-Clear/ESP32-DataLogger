@@ -16,6 +16,8 @@
 #include <OneWire.h>
 #include <freertos/semphr.h>
 
+#include <mutex>
+#include <optional>
 #include <vector>
 
 #define ADC_PIN 34
@@ -25,14 +27,16 @@
 constexpr const Vector2i displayTiling{120, 16};
 #define POS(x, y) displayTiling * Vector2i(x, y)
 
-void printAddress(DeviceAddress deviceAddress);
-String getTime();
+std::optional<time_t> getTime();
+String formatTime(const std::optional<time_t> &timestamp);
 
 int numberOfDevices;
 DeviceAddress tempDeviceAddress;
 
 const char* ntpServer = "fritz.box";
 const char* time_zone = "CET-1CEST,M3.5.0,M10.5.0/3";  // TimeZone rule for Europe/Rome including daylight adjustment rules (optional)
+
+using Callback = std::function<void()>;
 
 Tft tft(32);
 WifiKeepAliveTask wifiTask;
@@ -43,12 +47,14 @@ Sht30Fiber sht30Fiber;
 Ds18b20Fiber ds18b20Fiber(17);
 SystemDataFiber systemDataFiber;
 
-HttpPostTask httpPostTask(1000, std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
+HttpPostTask httpPostTask(std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
 
-using Callback = std::function<void()>;
 using ValueTask = QueueTask<Callback>;
 std::vector<ValueTask*> valueTasks{&fiberQueueTask1};
 SemaphoreHandle_t valuesSemaphore;
+
+PostData postData;
+std::mutex postDataMutex;
 
 void setup(void) {
   Serial.begin(115200);
@@ -79,18 +85,16 @@ void setup(void) {
 
   adcFiber.channel(ADC_PIN).addObserver([] (double v) {
     const double voltage = v * 2.0;
-    httpPostTask.dataUpdateQueue().push( [voltage] (HttpPostTask::PostData &postData) {
-      postData.voltage = voltage;
-    } );
+    std::lock_guard<std::mutex> lck(postDataMutex);
+    postData.voltage = voltage;
     const String voltageString = "VCC: " + String(voltage) + " V  ";
     tft.drawString(voltageString, POS(0, 4));
   });
 
   sht30Fiber.data().addObserver( [] (const Sht30Fiber::Data &data) {
-    httpPostTask.dataUpdateQueue().push( [data] (HttpPostTask::PostData &postData) {
-      postData.sht30Temperature = data.error ? NAN : data.temperature;
-      postData.sht30Humidity = data.error ? NAN : data.humidity;
-    } );
+    std::lock_guard<std::mutex> lck(postDataMutex);
+    postData.sht30Temperature = data.error ? NAN : data.temperature;
+    postData.sht30Humidity = data.error ? NAN : data.humidity;
 
     const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature))) + "       ";
     const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity))) + "       ";
@@ -109,9 +113,8 @@ void setup(void) {
       tft.drawString("Tmp: " + String(temperature) + " °C", POS(1, row));
       ++row;
     }
-    httpPostTask.dataUpdateQueue().push( [ds18b20] (HttpPostTask::PostData &postData) {
-      postData.ds18b20 = ds18b20;
-    } );
+    std::lock_guard<std::mutex> lck(postDataMutex);
+    postData.ds18b20 = ds18b20;
   });
 
   systemDataFiber.data().addObserver( [] (const SystemDataFiber::Data &values) {
@@ -169,24 +172,23 @@ void loop() {
     xSemaphoreTake(valuesSemaphore, portMAX_DELAY);
   }
 
+  httpPostTask.send(postData);
+
   const String interval = "Itr: " + String(loopTime) + " ms  ";
   const String fps = "FPS: " + String(1000.0 / loopTime);
   const String lastDurationString = "Dur: " + String(lastDuration) + " ms  ";
 
-  const String time = getTime() + "               ";
-  //String time = String(esp_log_timestamp() / 1000);
+  const std::optional<time_t> timestamp = getTime();
+  const String time = formatTime(timestamp) + "               ";
 
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
+  tft.drawString("Hallo", POS(0, 0));
 
   tft.drawString(time, POS(0, 0));
   tft.drawString(fps, POS(0, 1));
   tft.drawString(interval, POS(0, 2));
   tft.drawString(lastDurationString, POS(0, 3));
-
-  httpPostTask.dataUpdateQueue().push( [] (HttpPostTask::PostData &postData) {
-    
-  } );
 
   const int desiredInterval = 1000;
   lastDuration = millis() - start;
@@ -194,14 +196,21 @@ void loop() {
   delay(lastDelay);
 }
 
-String getTime() {
-  return String(millis() / 1000);
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    return String(millis() / 1000);
+std::optional<time_t> getTime() {
+  time_t now;
+  time(&now);
+  if (now > 946684800) // 2000-01-01T00:00:00
+    return now;
+  return {};
+}
+
+String formatTime(const std::optional<time_t> &timestamp) {
+  if (timestamp) {
+    tm timeinfo;
+    localtime_r(&timestamp.value(), &timeinfo);
+    char buf[64];
+    size_t written = strftime(buf, 64, "%a, %Y-%m-%d %H:%M:%S", &timeinfo);
+    return String(buf, written);
   }
-  
-  char buf[64];
-  size_t written = strftime(buf, 64, "%a, %Y-%m-%d %H:%M:%S", &timeinfo);
-  return String(buf, written);
+  return "NULL";
 }

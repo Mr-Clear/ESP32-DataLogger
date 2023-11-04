@@ -2,11 +2,12 @@
 
 #include <HTTPClient.h>
 
-HttpPostTask::HttpPostTask(unsigned long interval, std::function<bool()> getWifiConnected) :
-  LoopTask(interval, "HTTP POST", 8192, 10, Core::Core0),
-  _getWifiConnected(getWifiConnected),
-  _dataUpdateQueue(32)
-{ }
+HttpPostTask::HttpPostTask(std::function<bool()> getWifiConnected) :
+  QueueTask(20, "HTTP POST", 8192, 10, Core::Core0),
+  _getWifiConnected(getWifiConnected)
+{
+  Serial.println("HttpPostTask::HttpPostTask");
+ }
 
 HttpPostTask::~HttpPostTask() = default;
 
@@ -15,55 +16,51 @@ void HttpPostTask::setup() {
   _httpClient->setReuse(true);
 }
 
-void HttpPostTask::loop() {
+bool HttpPostTask::handleMessage(const PostData &data) {
+  bool success = false;
   if (_getWifiConnected()) {
-    while (_dataUpdateQueue.messagesWaiting()) {
-      _dataUpdateQueue.pop()(_data);
-    }
-    const String postDataSource = createPostData();
+    const String postDataSource = createPostData(data);
     if (postDataSource.length()) {
-      delay(100);
       _httpClient->begin("https://www.klierlinge.de/rrd/update");
       const int httpResponseCode = _httpClient->POST(postDataSource);
+      if(httpResponseCode == 200) {
+        success = true;
+      }
       _httpClient->end();
     }
-    _data = PostData{};
   }
+
+  return success;
 }
 
-
-const Queue<HttpPostTask::DataUpdate> &HttpPostTask::dataUpdateQueue() const {
-  return _dataUpdateQueue;
-}
-
-String HttpPostTask::createPostData() {
-  String data;
-  data.reserve(1024);
-  data += "{\"args\": [\"esp32test.rrd\", \"N:";
-  if (_data.duration < 0)
-    data += "U";
+String HttpPostTask::createPostData(const PostData &data) {
+  String dataString;
+  dataString.reserve(1024);
+  dataString += "{\"args\": [\"esp32test.rrd\", \"N:";
+  if (data.duration < 0)
+    dataString += "U";
   else
-    data += _data.duration;
-  data += ":";
-  if (std::isnan(_data.voltage))
-    data += "U";
+    dataString += data.duration;
+  dataString += ":";
+  if (std::isnan(data.voltage))
+    dataString += "U";
   else
-    data += _data.voltage;
-  for (const double &v : {_data.sht30Temperature, _data.sht30Humidity}) {
-    data += ":";
+    dataString += data.voltage;
+  for (const double &v : {data.sht30Temperature, data.sht30Humidity}) {
+    dataString += ":";
     if (std::isnan(v))
-      data += "U";
+      dataString += "U";
     else
-      data += v;
+      dataString += v;
   }
   for (int i = 0; i < 3; ++i) {
-    data += ":";
-    if (_data.ds18b20.size() > i)
-      data += _data.ds18b20[i];
+    dataString += ":";
+    if (data.ds18b20.size() > i)
+      dataString += data.ds18b20[i];
     else
-      data += "U";
+      dataString += "U";
   }
-  data += "\"]}";
+  dataString += "\"]}";
 
-  return data;
+  return dataString;
 }
