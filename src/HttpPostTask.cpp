@@ -3,11 +3,8 @@
 #include <HTTPClient.h>
 
 HttpPostTask::HttpPostTask(std::function<bool()> getWifiConnected) :
-  QueueTask(20, "HTTP POST", 8192, 10, Core::Core0),
-  _getWifiConnected(getWifiConnected)
-{
-  Serial.println("HttpPostTask::HttpPostTask");
- }
+  QueueTask(500, "HTTP POST", 8192, 10, Core::Core0),
+  _getWifiConnected(getWifiConnected) { }
 
 HttpPostTask::~HttpPostTask() = default;
 
@@ -21,22 +18,30 @@ bool HttpPostTask::handleMessage(const PostData &data) {
   if (_getWifiConnected()) {
     const String postDataSource = createPostData(data);
     if (postDataSource.length()) {
-      _httpClient->begin("https://www.klierlinge.de/rrd/update");
-      const int httpResponseCode = _httpClient->POST(postDataSource);
-      if(httpResponseCode == 200) {
+      if (_httpClient->begin("https://www.klierlinge.de/rrd/update"))
+      {
+        const int httpResponseCode = _httpClient->POST(postDataSource);
+        if (httpResponseCode != 200) {
+        Serial.println(postDataSource + " -> " + httpResponseCode);
+          Serial.println(_httpClient->getString());
+        }
         success = true;
+        _httpClient->end();
       }
-      _httpClient->end();
     }
   }
-
   return success;
 }
 
 String HttpPostTask::createPostData(const PostData &data) {
   String dataString;
   dataString.reserve(1024);
-  dataString += "{\"args\": [\"esp32test.rrd\", \"N:";
+  dataString += "{\"args\": [\"esp32test.rrd\", \"";
+  if (data.timestamp.has_value())
+    dataString += data.timestamp.value();
+  else
+    dataString += "N";
+  dataString += ":";
   if (data.duration < 0)
     dataString += "U";
   else

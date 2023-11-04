@@ -11,7 +11,7 @@
 class HTTPClient;
 
 struct PostData {
-  time_t timestamp;
+  std::optional<time_t> timestamp = {};
   unsigned long duration = -1;
   double voltage = NAN;
   uint8_t sht30Error = 1;
