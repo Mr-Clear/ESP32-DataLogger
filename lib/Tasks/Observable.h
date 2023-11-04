@@ -36,15 +36,16 @@ private:
 template <typename T>
 class ObservableValue : public Observable<T> {
 public:
-    ObservableValue() = default;
-    explicit ObservableValue(const T &value) :
-        _value(value) { }
+    explicit ObservableValue(const T &value = T{}, bool alwaysUpdate = true) :
+        _value{value},
+        _alwaysUpdate{alwaysUpdate}
+    { }
 
     ObservableValue(const ObservableValue<T> &o) = delete;
     T &operator=(const ObservableValue<T> &o) = delete;
 
     T &operator=(const T &o) {
-        if (_value != o) {
+        if (_alwaysUpdate || _value != o) {
             _value = o;
             this->Observable<T>::fireChange(o);  
         }
@@ -57,6 +58,7 @@ public:
 
 private:
     T _value;
+    bool _alwaysUpdate;
 };
 
 template <typename F /* from */, typename T /* to */>
