@@ -18,7 +18,8 @@ String deviceAddress2String(DeviceAddress deviceAddress) {
 }
 
 Ds18b20Fiber::Ds18b20Fiber(uint8_t pin) :
-  _pin(pin) { }
+  _pin{pin}
+{ }
 Ds18b20Fiber::~Ds18b20Fiber() = default;
 
 const Observable<std::map<String, float>> &Ds18b20Fiber::data() {

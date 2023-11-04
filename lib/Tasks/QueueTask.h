@@ -17,6 +17,10 @@ public:
       return _queue.push(data, timeoutMs);
   }
 
+  const Queue<T> &queue() const {
+    return _queue;
+  }
+
 protected:
   virtual void setup() = 0;
   /** @returns true when the message was handles successfully. */

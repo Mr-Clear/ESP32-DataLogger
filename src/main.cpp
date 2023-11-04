@@ -16,6 +16,7 @@
 #include <OneWire.h>
 #include <freertos/semphr.h>
 
+#include <cmath>
 #include <mutex>
 #include <optional>
 #include <vector>
@@ -76,7 +77,6 @@ void setup(void) {
   for (ValueTask *valueTask : valueTasks) {
     valueTask->start();
   }
-  Serial.println(valueTasks.size());
   valuesSemaphore = xSemaphoreCreateCounting(valueTasks.size(), 0);
 
   tft.loadFont(JetBrainsMono15);
@@ -159,33 +159,59 @@ void setup(void) {
 unsigned long lastDuration = 0;
 unsigned long lastDelay = 0;
 unsigned long lastStart = 0;
+time_t lastSend = 0;
 void loop() {
   const unsigned long start = millis();
   const unsigned long loopTime = start - lastStart;
   lastStart = start;
+
+  std::optional<time_t> time = getTime();
+  {
+    std::lock_guard<std::mutex> lck(postDataMutex);
+    postData = {};
+    postData.timestamp = time;
+  }
   
-  for (ValueTask *valueTask : valueTasks) {
+  for(ValueTask *valueTask : valueTasks) {
     valueTask->send([]{ xSemaphoreGive(valuesSemaphore); });
   }
   
-  for (int i = 0; i < valueTasks.size(); i++) {
+  for(int i = 0; i < valueTasks.size(); i++) {
     xSemaphoreTake(valuesSemaphore, portMAX_DELAY);
   }
+  
 
-  httpPostTask.send(postData);
+  const bool sendQueueEmpty = httpPostTask.queue().empty();
+  if(sendQueueEmpty || time.has_value()) {
+    PostData postDataCopy;
+    {
+      std::lock_guard<std::mutex> lck(postDataMutex);
+      postData.duration = millis() - start;
+      postDataCopy = postData;
+    }
+    bool send = sendQueueEmpty;
+    if(!sendQueueEmpty) {
+      const double expFactor = 0.026896345;  // With this value, the buffer runs full in 7 days.
+      const int sendInterval = static_cast<int>(std::pow(2, expFactor * httpPostTask.queue().size()));
+      send = time.has_value() ? (difftime(time.value(), lastSend) >= sendInterval) : true;
+    }
+    if(send) {
+      httpPostTask.send(postDataCopy, 100);
+      lastSend = time.value_or(0);
+    }
+  }
 
   const String interval = "Itr: " + String(loopTime) + " ms  ";
   const String fps = "FPS: " + String(1000.0 / loopTime);
   const String lastDurationString = "Dur: " + String(lastDuration) + " ms  ";
 
-  const std::optional<time_t> timestamp = getTime();
-  const String time = formatTime(timestamp) + "               ";
+  const String timeString = formatTime(time) + "               ";
 
   tft.setRotation(3);
   tft.setTextColor(Color::White, Color::Black);
   tft.drawString("Hallo", POS(0, 0));
 
-  tft.drawString(time, POS(0, 0));
+  tft.drawString(timeString, POS(0, 0));
   tft.drawString(fps, POS(0, 1));
   tft.drawString(interval, POS(0, 2));
   tft.drawString(lastDurationString, POS(0, 3));
