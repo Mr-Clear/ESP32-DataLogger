@@ -12,6 +12,10 @@ bool Sht30Fiber::Data::operator!=(const Data &o) const {
 Sht30Fiber::Sht30Fiber() = default;
 Sht30Fiber::~Sht30Fiber() = default;
 
+void Sht30Fiber::scan() {
+  _sensor->Begin();
+}
+
 const Observable<Sht30Fiber::Data> &Sht30Fiber::data(){
   return _data;
 }
@@ -28,7 +32,7 @@ const Observable<u_int8_t> &Sht30Fiber::error() {
 }
 
 void Sht30Fiber::setup() {
-  _sensor.reset(new SHT3x);
+  _sensor.reset(new SHT3x{68, SHT3x::Zero, 255U, SHT3x::SHT30, SHT3x::Single_LowRep_ClockStretch});
   _sensor->Begin();
 }
 
@@ -40,6 +44,7 @@ void Sht30Fiber::loop() {
   if (sensorError) {
     data.temperature = NAN;
     data.humidity = NAN;
+    _sensor->Begin();
   } else {
     data.temperature = _sensor->GetTemperature();
     data.humidity = _sensor->GetRelHumidity();

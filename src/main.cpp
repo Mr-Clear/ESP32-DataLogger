@@ -3,8 +3,6 @@
 #include "Gpio.h"
 #include "HttpPostTask.h"
 #include "Sht30Fiber.h"
-#include "SystemDataFiber.h"
-#include "Tft.h"
 #include "WifiKeepAliveTask.h"
 
 #include <FiberQueueTask.h>
@@ -22,11 +20,39 @@
 #include <vector>
 
 #define ADC_PIN 34
-#define BUTTON_1 0
-#define BUTTON_2 35
+#define BUTTON_PIN 0
+#define LED_PIN 2
+#define DS18B20_PIN 16
 
-constexpr const Vector2i displayTiling{120, 16};
-#define POS(x, y) displayTiling * Vector2i(x, y)
+/*
+rrd.create('dataBalkon',
+            [ds('Duration', heartbeat=5),
+            ds('Voltage', heartbeat=5),
+            ds('TempAussen', heartbeat=5),
+            ds('HumAussen', heartbeat=5),
+            ds('TempIntern', heartbeat=5),
+            ds('TempLinks', heartbeat=5),
+            ds('TempRechts', heartbeat=5)],
+            [r(t.AVERAGE, 0.9, timedelta(seconds=1), timedelta(days=31)),
+            r(t.AVERAGE, 0.5, timedelta(minutes=1), timedelta(days=366)),
+            r(t.MIN, 0.5, timedelta(minutes=1), timedelta(days=366)),
+            r(t.MAX, 0.5, timedelta(minutes=1), timedelta(days=366)),
+            r(t.AVERAGE, 0.5, timedelta(hours=1), timedelta(days=3653)),
+            r(t.MIN, 0.5, timedelta(hours=1), timedelta(days=3653)),
+            r(t.MAX, 0.5, timedelta(days=1), timedelta(days=36525)),
+            r(t.AVERAGE, 0.5, timedelta(days=1), timedelta(days=36525)),
+            r(t.MIN, 0.5, timedelta(days=1), timedelta(days=36525)),
+            r(t.MAX, 0.5, timedelta(days=1), timedelta(days=36525))],
+            step=timedelta(seconds=1), overwrite=True)
+
+rrdtool create dataBalkon.rrd --step 1 --start 1672527600 DS:Duration:GAUGE:5:U:U DS:Voltage:GAUGE:5:U:U DS:TempAussen:GAUGE:5:U:U DS:HumAussen:GAUGE:5:U:U DS:TempIntern:GAUGE:5:U:U DS:TempLinks:GAUGE:5:U:U DS:TempRechts:GAUGE:5:U:U RRA:AVERAGE:0.9:1:2678400 RRA:AVERAGE:0.5:60:527040 RRA:MIN:0.5:60:527040 RRA:MAX:0.5:60:527040 RRA:AVERAGE:0.5:3600:87672 RRA:MIN:0.5:3600:87672 RRA:MAX:0.5:86400:36525 RRA:AVERAGE:0.5:86400:36525 RRA:MIN:0.5:86400:36525 RRA:MAX:0.5:86400:36525
+*/
+
+std::array<String, 3> ds18b20Order{{
+  "28e42843d4e13c6e", // Intern
+  "2826515704e13d70", // Links
+  "28a19e5704e13d52"  // Rechts
+}};
 
 std::optional<time_t> getTime();
 String formatTime(const std::optional<time_t> &timestamp);
@@ -39,14 +65,12 @@ const char* time_zone = "CET-1CEST,M3.5.0,M10.5.0/3";  // TimeZone rule for Euro
 
 using Callback = std::function<void()>;
 
-Tft tft(32);
 WifiKeepAliveTask wifiTask;
 
 FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
 AdcFiber adcFiber;
 Sht30Fiber sht30Fiber;
-Ds18b20Fiber ds18b20Fiber(17);
-SystemDataFiber systemDataFiber;
+Ds18b20Fiber ds18b20Fiber(DS18B20_PIN);
 
 HttpPostTask httpPostTask(std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
 
@@ -68,9 +92,7 @@ void setup(void) {
   fiberQueueTask1.addFiber(adcFiber);
   fiberQueueTask1.addFiber(sht30Fiber);
   fiberQueueTask1.addFiber(ds18b20Fiber);
-  fiberQueueTask1.addFiber(systemDataFiber);
 
-  tft.start();
   wifiTask.start();
   httpPostTask.start();
 
@@ -79,16 +101,11 @@ void setup(void) {
   }
   valuesSemaphore = xSemaphoreCreateCounting(valueTasks.size(), 0);
 
-  tft.loadFont(JetBrainsMono15);
-  tft.setRotation(3);
-  tft.fillScreen({4, 4, 4});
-
   adcFiber.channel(ADC_PIN).addObserver([] (double v) {
     const double voltage = v * 2.0;
     std::lock_guard<std::mutex> lck(postDataMutex);
     postData.voltage = voltage;
-    const String voltageString = "VCC: " + String(voltage) + " V  ";
-    tft.drawString(voltageString, POS(0, 4));
+    Serial.println("VCC: " + String(voltage) + " V");
   });
 
   sht30Fiber.data().addObserver( [] (const Sht30Fiber::Data &data) {
@@ -96,70 +113,56 @@ void setup(void) {
     postData.sht30Temperature = data.error ? NAN : data.temperature;
     postData.sht30Humidity = data.error ? NAN : data.humidity;
 
-    const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature))) + "       ";
-    const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity))) + "       ";
-    tft.setTextColor(Color::White, Color::Black);
-    tft.drawString(tmp, POS(0, 5));
-    tft.drawString(hum, POS(0, 6));
+    const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature)));
+    const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity)));
+
+    Serial.println(tmp + ", " + hum);
   });
 
   ds18b20Fiber.data().addObserver( [] ( const std::map<String, float> &values) {
-    std::vector<double> ds18b20;
+    std::array<float, 3> ds18b20;
     std::vector<String> ds18b20Strings;
-    int row = 0;
-    for (const auto & [address, temperature] : values) {
-      ds18b20.emplace_back(temperature);
-      tft.setTextColor(Color::White, Color::Black);
-      tft.drawString("Tmp: " + String(temperature) + " °C", POS(1, row));
-      ++row;
+    String s;
+    int i = 0;
+    for(const String &address : ds18b20Order) {
+      const float temperature = values.count(address) ? values.at(address) : NAN;
+      ds18b20[i] = temperature;
+      s += address + ": " + temperature + " ";
+      ++i;
     }
+    if(!s.isEmpty())
+      Serial.println(s);
     std::lock_guard<std::mutex> lck(postDataMutex);
     postData.ds18b20 = ds18b20;
   });
 
-  systemDataFiber.data().addObserver( [] (const SystemDataFiber::Data &values) {
-    tft.setTextColor(Color::White, Color::Black);
-    const String memoryTotal = "Mem: " + String(ESP.getHeapSize()) + "       ";
-    const String memoryFree = "Fre: " + String(ESP.getFreeHeap()) + "       ";
-    tft.drawString(memoryTotal, POS(1, 4));
-    tft.drawString(memoryFree, POS(1, 5));
+  addGpioEvent(BUTTON_PIN, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
+    if(type == GpioEventType::Falling) {
+      Serial.print("Scanning DS18B20... ");
+      uint8_t devices = ds18b20Fiber.scan();
+      Serial.println(String(devices) + " devices found.");
+      sht30Fiber.scan();
+    }
   });
-
-  wifiTask.localIp().addObserver( [] (const IPAddress &ip) {
-    tft.setTextColor(Color::White, Color::Black);
-    const String ips = ip.toString() + "      ";
-    tft.drawString(ips, POS(1, 6));
-  }, true);
 
   wifiTask.wifiStatusText().addObserver( [] (const String &status) {
-    tft.setTextColor(Color::White, Color::Black);
-    const String wifiStatusString = status + "           ";
-    tft.drawString(wifiStatusString, POS(0, 7));
-  }, true);
-  
-  addGpioEvent(BUTTON_2, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
-    if (type == GpioEventType::Falling) {
-      const int blVal = tft.getBackLite() / 2;
-      tft.setTextColor(Color::White, Color::Black);
-      tft.drawString(String(tft.setBackLite(blVal)) + "       ", POS(1, 3));
-    }
+      Serial.print("WIFI: ");
+      Serial.println(status);
   });
 
-  addGpioEvent(BUTTON_1, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
-    if (type == GpioEventType::Falling) {
-      const int blVal = max(int(tft.getBackLite()) * 2, 1);
-      tft.setTextColor(Color::White, Color::Black);
-      tft.drawString(String(tft.setBackLite(blVal)) + "       ", POS(1, 3));
-    }
+  wifiTask.localIp().addObserver( [] (const IPAddress &address) {
+      Serial.print("IP address: ");
+      Serial.println(address.toString());
   });
 
-  tft.drawString(String(tft.getBackLite()) + "       ", POS(1, 3));
+  pinMode(LED_PIN, OUTPUT);
 }
 
 unsigned long lastDuration = 0;
 unsigned long lastDelay = 0;
 unsigned long lastStart = 0;
 time_t lastSend = 0;
+bool ledOn = true;
 void loop() {
   const unsigned long start = millis();
   const unsigned long loopTime = start - lastStart;
@@ -179,7 +182,6 @@ void loop() {
   for(int i = 0; i < valueTasks.size(); i++) {
     xSemaphoreTake(valuesSemaphore, portMAX_DELAY);
   }
-  
 
   const bool sendQueueEmpty = httpPostTask.queue().empty();
   if(sendQueueEmpty || time.has_value()) {
@@ -201,20 +203,8 @@ void loop() {
     }
   }
 
-  const String interval = "Itr: " + String(loopTime) + " ms  ";
-  const String fps = "FPS: " + String(1000.0 / loopTime);
-  const String lastDurationString = "Dur: " + String(lastDuration) + " ms  ";
-
-  const String timeString = formatTime(time) + "               ";
-
-  tft.setRotation(3);
-  tft.setTextColor(Color::White, Color::Black);
-  tft.drawString("Hallo", POS(0, 0));
-
-  tft.drawString(timeString, POS(0, 0));
-  tft.drawString(fps, POS(0, 1));
-  tft.drawString(interval, POS(0, 2));
-  tft.drawString(lastDurationString, POS(0, 3));
+  digitalWrite(LED_PIN, (ledOn && wifiTask.isWifiConnected()) ? HIGH : LOW);
+  ledOn = !ledOn;
 
   const int desiredInterval = 1000;
   lastDuration = millis() - start;

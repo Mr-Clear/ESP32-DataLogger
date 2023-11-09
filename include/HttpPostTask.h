@@ -17,7 +17,7 @@ struct PostData {
   uint8_t sht30Error = 1;
   double sht30Temperature = NAN;
   double sht30Humidity = NAN;
-  std::vector<double> ds18b20;
+  std::array<float, 3> ds18b20;
 };
 
 class HttpPostTask : public QueueTask<PostData> {

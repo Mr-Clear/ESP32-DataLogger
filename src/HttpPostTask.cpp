@@ -36,7 +36,7 @@ bool HttpPostTask::handleMessage(const PostData &data) {
 String HttpPostTask::createPostData(const PostData &data) {
   String dataString;
   dataString.reserve(1024);
-  dataString += "{\"args\": [\"esp32test.rrd\", \"";
+  dataString += "{\"args\": [\"dataBalkon.rrd\", \"";
   if (data.timestamp.has_value())
     dataString += data.timestamp.value();
   else

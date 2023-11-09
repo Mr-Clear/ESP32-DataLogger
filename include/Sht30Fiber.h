@@ -25,6 +25,8 @@ public:
   const Observable<float> &temperature();
   const Observable<float> &humidity();
   const Observable<uint8_t> &error();
+
+  void scan();
   
 protected:
   void setup() override;
