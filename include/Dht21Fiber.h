@@ -5,26 +5,24 @@
 
 #include <memory>
 
-class SHT3x;
+class DHT;
 
-class Sht30Fiber : public Fiber {
+class Dht21Fiber : public Fiber {
 public:
   struct Data {
     float temperature;
     float humidity;
-    int error;
     
     bool operator==(const Data &o) const;
     bool operator!=(const Data &o) const;
   };
 
-  Sht30Fiber();
-  ~Sht30Fiber();
+  Dht21Fiber(uint8_t pin);
+  ~Dht21Fiber();
 
   const Observable<Data> &data();
   const Observable<float> &temperature();
   const Observable<float> &humidity();
-  const Observable<uint8_t> &error();
   
   void scan();
   
@@ -33,7 +31,8 @@ protected:
   void loop() override;
 
 private:
-  std::unique_ptr<SHT3x> _sensor;
+  uint8_t _pin;
+  std::unique_ptr<DHT> _sensor;
   ObservableValue<Data> _data;
   ObservableValue<float> _temperature;
   ObservableValue<float> _humidity;

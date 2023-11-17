@@ -1,8 +1,8 @@
 #include "AdcFiber.h"
+#include "Dht21Fiber.h"
 #include "Ds18b20Fiber.h"
 #include "Gpio.h"
 #include "HttpPostTask.h"
-#include "Sht30Fiber.h"
 #include "SystemDataFiber.h"
 #include "Tft.h"
 #include "WifiKeepAliveTask.h"
@@ -25,6 +25,7 @@
 #define BUTTON_1 0
 #define BUTTON_2 35
 #define DS18B20_PIN 17
+#define DHT21_PIN 15
 
 constexpr const int ds18b20Count = 3;
 std::array<String, ds18b20Count> ds18b20Order{{
@@ -32,7 +33,6 @@ std::array<String, ds18b20Count> ds18b20Order{{
   "283eea80e3e13cd1",
   "28a05680e3e13c1d",
 }};
-
 
 constexpr const Vector2i displayTiling{120, 16};
 #define POS(x, y) displayTiling * Vector2i(x, y)
@@ -53,7 +53,7 @@ WifiKeepAliveTask wifiTask;
 
 FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
 AdcFiber adcFiber;
-Sht30Fiber sht30Fiber;
+Dht21Fiber dht21Fiber{DHT21_PIN};
 Ds18b20Fiber ds18b20Fiber(DS18B20_PIN);
 SystemDataFiber systemDataFiber;
 
@@ -75,7 +75,7 @@ void setup(void) {
   configTzTime(time_zone, ntpServer);
 
   fiberQueueTask1.addFiber(adcFiber);
-  fiberQueueTask1.addFiber(sht30Fiber);
+  fiberQueueTask1.addFiber(dht21Fiber);
   fiberQueueTask1.addFiber(ds18b20Fiber);
   fiberQueueTask1.addFiber(systemDataFiber);
 
@@ -94,24 +94,29 @@ void setup(void) {
 
   adcFiber.channel(ADC_PIN).addObserver([] (double v) {
     const double voltage = v * 2.0;
-    std::lock_guard<std::mutex> lck(postDataMutex);
-    postData.voltage = voltage;
+    {
+      std::lock_guard<std::mutex> lck(postDataMutex);
+      postData.voltage = voltage;
+    }
     const String voltageString = "VCC: " + String(voltage) + " V  ";
     tft.drawString(voltageString, POS(0, 4));
     Serial.println(voltageString);
   });
 
-  sht30Fiber.data().addObserver( [] (const Sht30Fiber::Data &data) {
-    std::lock_guard<std::mutex> lck(postDataMutex);
-    postData.sht30Temperature = data.error ? NAN : data.temperature;
-    postData.sht30Humidity = data.error ? NAN : data.humidity;
+  dht21Fiber.data().addObserver( [] (const Dht21Fiber::Data &data) {
+    {
+      std::lock_guard<std::mutex> lck(postDataMutex);
+      postData.sht30Temperature = data.temperature;
+      postData.sht30Humidity = data.humidity;
+    }
 
-    const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature))) + "       ";
-    const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity))) + "       ";
     tft.setTextColor(Color::White, Color::Black);
-    tft.drawString(tmp, POS(0, 5));
-    tft.drawString(hum, POS(0, 6));
+    tft.drawString(String{"Tmp: "} + data.temperature + "       ", POS(0, 5));
+    tft.drawString(String{"Hum: "} + data.humidity + "       ", POS(0, 6));
+
+    Serial.println(String{"DHT21 Temp: "} + data.temperature + "Hum: " + data.humidity);
   });
+
 
   ds18b20Fiber.data().addObserver( [] ( const std::map<String, float> &values) {
     std::array<float, ds18b20Count> ds18b20;

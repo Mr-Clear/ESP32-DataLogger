@@ -10,3 +10,9 @@
 [submodule "lib/SHT3x"]
 	path = lib/SHT3x
 	url = https://github.com/Risele/SHT3x
+[submodule "lib/Adafruit_Sensor"]
+	path = lib/Adafruit_Sensor
+	url = https://github.com/adafruit/Adafruit_Sensor
+[submodule "lib/DHT-sensor-library"]
+	path = lib/DHT-sensor-library
+	url = https://github.com/adafruit/DHT-sensor-library
