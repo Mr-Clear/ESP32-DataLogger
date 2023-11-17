@@ -16,6 +16,7 @@ public:
   ~Ds18b20Fiber();
 
   const Observable<std::map<String, float>> &data();
+  uint8_t scan();
   
 protected:
   void setup() override;

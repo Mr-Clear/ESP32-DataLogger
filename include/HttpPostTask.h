@@ -11,13 +11,13 @@
 class HTTPClient;
 
 struct PostData {
-  std::optional<time_t> timestamp = {};
   unsigned long duration = -1;
-  double voltage = NAN;
+  float voltage = NAN;
+  float sht30Temperature = NAN;
+  float sht30Humidity = NAN;
+  std::array<float, 3> ds18b20;
   uint8_t sht30Error = 1;
-  double sht30Temperature = NAN;
-  double sht30Humidity = NAN;
-  std::vector<double> ds18b20;
+  std::optional<time_t> timestamp = {};
 };
 
 class HttpPostTask : public QueueTask<PostData> {

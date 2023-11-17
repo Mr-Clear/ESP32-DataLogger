@@ -24,6 +24,15 @@
 #define ADC_PIN 34
 #define BUTTON_1 0
 #define BUTTON_2 35
+#define DS18B20_PIN 17
+
+constexpr const int ds18b20Count = 3;
+std::array<String, ds18b20Count> ds18b20Order{{
+  "282c8980e3e13cbb",
+  "283eea80e3e13cd1",
+  "28a05680e3e13c1d",
+}};
+
 
 constexpr const Vector2i displayTiling{120, 16};
 #define POS(x, y) displayTiling * Vector2i(x, y)
@@ -45,7 +54,7 @@ WifiKeepAliveTask wifiTask;
 FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
 AdcFiber adcFiber;
 Sht30Fiber sht30Fiber;
-Ds18b20Fiber ds18b20Fiber(17);
+Ds18b20Fiber ds18b20Fiber(DS18B20_PIN);
 SystemDataFiber systemDataFiber;
 
 HttpPostTask httpPostTask(std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
@@ -89,6 +98,7 @@ void setup(void) {
     postData.voltage = voltage;
     const String voltageString = "VCC: " + String(voltage) + " V  ";
     tft.drawString(voltageString, POS(0, 4));
+    Serial.println(voltageString);
   });
 
   sht30Fiber.data().addObserver( [] (const Sht30Fiber::Data &data) {
@@ -104,15 +114,28 @@ void setup(void) {
   });
 
   ds18b20Fiber.data().addObserver( [] ( const std::map<String, float> &values) {
-    std::vector<double> ds18b20;
+    std::array<float, ds18b20Count> ds18b20;
     std::vector<String> ds18b20Strings;
-    int row = 0;
-    for (const auto & [address, temperature] : values) {
-      ds18b20.emplace_back(temperature);
-      tft.setTextColor(Color::White, Color::Black);
-      tft.drawString("Tmp: " + String(temperature) + " °C", POS(1, row));
-      ++row;
+
+    tft.setTextColor(Color::White, Color::Black);
+    String s;
+    int i = 0;
+    for(const String &address : ds18b20Order) {
+      const float temperature = values.count(address) ? values.at(address) : NAN;
+      ds18b20[i] = temperature;
+      s += address + ": " + temperature + " ";
+      tft.drawString("Tmp: " + String(temperature) + " °C", POS(1, i));
+      ++i;
     }
+    int row = 0;
+    for(const auto &[address, value] : values) {
+      if(std::find(ds18b20Order.begin(), ds18b20Order.end(), address) == ds18b20Order.end())
+        Serial.println(address + ": " + value);
+    }
+    
+    if(!s.isEmpty())
+      Serial.println(s);
+
     std::lock_guard<std::mutex> lck(postDataMutex);
     postData.ds18b20 = ds18b20;
   });
@@ -126,12 +149,16 @@ void setup(void) {
   });
 
   wifiTask.localIp().addObserver( [] (const IPAddress &ip) {
+    Serial.print("IP address: ");
+    Serial.println(ip.toString());
     tft.setTextColor(Color::White, Color::Black);
     const String ips = ip.toString() + "      ";
     tft.drawString(ips, POS(1, 6));
   }, true);
 
   wifiTask.wifiStatusText().addObserver( [] (const String &status) {
+    Serial.print("WIFI: ");
+    Serial.println(status);
     tft.setTextColor(Color::White, Color::Black);
     const String wifiStatusString = status + "           ";
     tft.drawString(wifiStatusString, POS(0, 7));

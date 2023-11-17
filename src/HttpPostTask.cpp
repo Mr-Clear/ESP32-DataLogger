@@ -22,7 +22,7 @@ bool HttpPostTask::handleMessage(const PostData &data) {
       {
         const int httpResponseCode = _httpClient->POST(postDataSource);
         if (httpResponseCode != 200) {
-        Serial.println(postDataSource + " -> " + httpResponseCode);
+          Serial.println(postDataSource + " -> " + httpResponseCode);
           Serial.println(_httpClient->getString());
         }
         success = true;

@@ -26,6 +26,11 @@ const Observable<std::map<String, float>> &Ds18b20Fiber::data() {
     return _data;
 }
 
+uint8_t Ds18b20Fiber::scan() {
+    _sensors->begin();
+    return _sensors->getDeviceCount();
+}
+
 void Ds18b20Fiber::setup() {
     _oneWire.reset(new OneWire(_pin));
     _sensors.reset(new DallasTemperature(_oneWire.get()));
@@ -42,6 +47,10 @@ void Ds18b20Fiber::loop() {
             float tempC = _sensors->getTempC(deviceAddress);
             values[deviceAddress2String(deviceAddress)] = tempC;
         }
+    }
+
+    if(_sensors->getDeviceCount() != 3) {
+        _sensors->begin();
     }
     _data = values;
 }
