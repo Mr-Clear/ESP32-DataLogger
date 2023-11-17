@@ -48,10 +48,12 @@ rrd.create('dataBalkon',
 rrdtool create dataBalkon.rrd --step 1 --start 1672527600 DS:Duration:GAUGE:5:U:U DS:Voltage:GAUGE:5:U:U DS:TempAussen:GAUGE:5:U:U DS:HumAussen:GAUGE:5:U:U DS:TempIntern:GAUGE:5:U:U DS:TempLinks:GAUGE:5:U:U DS:TempRechts:GAUGE:5:U:U RRA:AVERAGE:0.9:1:2678400 RRA:AVERAGE:0.5:60:527040 RRA:MIN:0.5:60:527040 RRA:MAX:0.5:60:527040 RRA:AVERAGE:0.5:3600:87672 RRA:MIN:0.5:3600:87672 RRA:MAX:0.5:86400:36525 RRA:AVERAGE:0.5:86400:36525 RRA:MIN:0.5:86400:36525 RRA:MAX:0.5:86400:36525
 */
 
-std::array<String, 3> ds18b20Order{{
-  "28e42843d4e13c6e", // Intern
-  "2826515704e13d70", // Links
-  "28a19e5704e13d52"  // Rechts
+constexpr const int ds18b20Count = 4;
+std::array<String, ds18b20Count> ds18b20Order{{
+  "28d6d743d48650d6", // 1 (Luft)
+  "286bb343d406055e", // 2 (Erde)
+  "28425b43d4b823ba", // 3 (Teich)
+  "28526543d4e13cde", // 4 (Intern)
 }};
 
 std::optional<time_t> getTime();
@@ -120,7 +122,7 @@ void setup(void) {
   });
 
   ds18b20Fiber.data().addObserver( [] ( const std::map<String, float> &values) {
-    std::array<float, 3> ds18b20;
+    std::array<float, ds18b20Count> ds18b20;
     std::vector<String> ds18b20Strings;
     String s;
     int i = 0;
@@ -129,6 +131,10 @@ void setup(void) {
       ds18b20[i] = temperature;
       s += address + ": " + temperature + " ";
       ++i;
+    }
+    for(const auto &[address, value] : values) {
+      if(std::find(ds18b20Order.begin(), ds18b20Order.end(), address) == ds18b20Order.end())
+        Serial.println(address + ": " + value);
     }
     if(!s.isEmpty())
       Serial.println(s);

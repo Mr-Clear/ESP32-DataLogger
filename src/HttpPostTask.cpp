@@ -22,7 +22,7 @@ bool HttpPostTask::handleMessage(const PostData &data) {
       {
         const int httpResponseCode = _httpClient->POST(postDataSource);
         if (httpResponseCode != 200) {
-        Serial.println(postDataSource + " -> " + httpResponseCode);
+          Serial.println(postDataSource + " -> " + httpResponseCode);
           Serial.println(_httpClient->getString());
         }
         success = true;
@@ -36,7 +36,7 @@ bool HttpPostTask::handleMessage(const PostData &data) {
 String HttpPostTask::createPostData(const PostData &data) {
   String dataString;
   dataString.reserve(1024);
-  dataString += "{\"args\": [\"dataBalkon.rrd\", \"";
+  dataString += "{\"args\": [\"dataTerrasse.rrd\", \"";
   if (data.timestamp.has_value())
     dataString += data.timestamp.value();
   else
@@ -58,7 +58,7 @@ String HttpPostTask::createPostData(const PostData &data) {
     else
       dataString += v;
   }
-  for (int i = 0; i < 3; ++i) {
+  for (int i = 0; i < 4; ++i) {
     dataString += ":";
     if (data.ds18b20.size() > i)
       dataString += data.ds18b20[i];
