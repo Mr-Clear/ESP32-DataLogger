@@ -1,0 +1,22 @@
+(footprint "Screw Terminal 3*2.54" (version 20221018) (generator pcbnew)
+  (layer "F.Cu")
+  (attr through_hole)
+  (fp_text reference "REF**" (at -5.64 2.04 unlocked) (layer "F.SilkS") hide
+      (effects (font (size 1 1) (thickness 0.1)))
+    (tstamp 3d0b0114-eae5-4e89-b9e3-9363def67fb2)
+  )
+  (fp_text value "Screw Terminal 3*2.54" (at -5.64 3.54 unlocked) (layer "F.Fab") hide
+      (effects (font (size 1 1) (thickness 0.15)))
+    (tstamp 64f13cfb-b0f5-4d13-82f6-4423a0c06557)
+  )
+  (fp_rect (start -3.1 -7.62) (end 3.1 0)
+    (stroke (width 0.1) (type default)) (fill none) (layer "F.SilkS") (tstamp fdc64441-3824-4f94-925e-a39e5ca0ac5b))
+  (pad "1" thru_hole circle (at 0 -1.27) (size 1.524 1.524) (drill 0.762) (layers "*.Cu" "*.Mask") (tstamp 502b6f37-dea0-4c28-adc4-6c63d34a5d67))
+  (pad "2" thru_hole circle (at 0 -3.81) (size 1.524 1.524) (drill 0.762) (layers "*.Cu" "*.Mask") (tstamp 9f3c2fee-2c8f-4ef8-a728-775a60e1791b))
+  (pad "3" thru_hole circle (at 0 -6.35) (size 1.524 1.524) (drill 0.762) (layers "*.Cu" "*.Mask") (tstamp 112eb3ce-e1f5-49a8-b813-75fe0891f811))
+  (model "${KICAD7_3DMODEL_DIR}/TerminalBlock_Phoenix.3dshapes/TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal.wrl"
+    (offset (xyz 0 1.27 0))
+    (scale (xyz 0.5 0.6 0.5))
+    (rotate (xyz 0 0 -90))
+  )
+)
