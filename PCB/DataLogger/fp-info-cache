@@ -1,11 +1,4 @@
-15361277137263
-ESP32Board
-1WireConnection
-
-
-0
-3
-3
+13654999187301
 ESP32Board
 ESP32 Board
 
@@ -14,12 +7,12 @@ ESP32 Board
 38
 38
 ESP32Board
-SHT30 Connect
-
-
+Jumper
+Through hole straight pin header, 1x03, 2.54mm pitch, single row
+Through hole pin header THT 1x03 2.54mm single row
 0
-4
-4
+3
+3
 ESP32Board
 Screw Terminal 2*2.54
 
@@ -56,7 +49,7 @@ Screw Terminal 4*2.54
 4
 4
 ESP32Board
-Screw Terminal 4*2.54 SHT30
+Screw Terminal 4*2.54 I²C
 
 
 0

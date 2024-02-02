@@ -15,7 +15,7 @@
   (pad "2" thru_hole circle (at 0 -3.81) (size 1.524 1.524) (drill 0.762) (layers "*.Cu" "*.Mask") (tstamp 9f3c2fee-2c8f-4ef8-a728-775a60e1791b))
   (model "${KICAD7_3DMODEL_DIR}/TerminalBlock_Phoenix.3dshapes/TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal.wrl"
     (offset (xyz 0 1.27 0))
-    (scale (xyz 0.5 0.6 0.6))
+    (scale (xyz 0.5 0.6 0.5))
     (rotate (xyz 0 0 -90))
   )
 )
