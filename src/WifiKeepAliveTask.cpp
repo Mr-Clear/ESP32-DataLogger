@@ -71,7 +71,7 @@ void WifiKeepAliveTask::setup() {
     _localIp = info.got_ip.ip_info.ip.addr;
    }, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
   WiFi.onEvent([this] (WiFiEvent_t event, WiFiEventInfo_t info) { 
-    _localIp = 0u;
+    _localIp = 0ul;
    }, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_LOST_IP);
   WiFi.onEvent([this] (WiFiEvent_t event, WiFiEventInfo_t info) { 
     _wifiStatus = WiFi.status();
