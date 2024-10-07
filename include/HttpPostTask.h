@@ -13,10 +13,10 @@ class HTTPClient;
 
 struct PostData {
   unsigned long duration = -1;
-  float voltage = NAN;
   float sht30Temperature = NAN;
   float sht30Humidity = NAN;
-  std::array<float, 4> ds18b20;
+  float ds18b20_13;
+  float ds18b20_16;
   uint8_t sht30Error = 1;
   std::optional<time_t> timestamp = {};
 };

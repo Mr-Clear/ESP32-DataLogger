@@ -2,6 +2,27 @@
 
 #include <HTTPClient.h>
 
+#include <functional>
+
+template <typename T>
+void addValue(String &s, T value, bool isValid) {
+  s += ":";
+  if (isValid)
+    s += value;
+  else
+    s += "U";
+}
+
+template <typename T>
+void addValueNan(String &s, T value) {
+  addValue(s, value, !std::isnan(value));
+}
+
+template <typename T>
+void addValueGEZ(String &s, T value) {
+  addValue(s, value, value >= 0);
+}
+
 HttpPostTask::HttpPostTask(std::function<bool()> getWifiConnected) :
   QueueTask(500, "HTTP POST", 8192, 10, Core::Core0),
   _getWifiConnected(getWifiConnected) { }
@@ -17,6 +38,8 @@ bool HttpPostTask::handleMessage(const PostData &data) {
   bool success = false;
   if (_getWifiConnected()) {
     const String postDataSource = createPostData(data);
+    Serial.println(postDataSource);
+    return true;
     if (postDataSource.length()) {
       if (_httpClient->begin("https://www.klierlinge.de/rrd/update"))
       {
@@ -41,30 +64,12 @@ String HttpPostTask::createPostData(const PostData &data) {
     dataString += data.timestamp.value();
   else
     dataString += "N";
-  dataString += ":";
-  if (data.duration < 0)
-    dataString += "U";
-  else
-    dataString += data.duration;
-  dataString += ":";
-  if (std::isnan(data.voltage))
-    dataString += "U";
-  else
-    dataString += data.voltage;
+  addValueGEZ(dataString, data.duration);
   for (const double &v : {data.sht30Temperature, data.sht30Humidity}) {
-    dataString += ":";
-    if (std::isnan(v))
-      dataString += "U";
-    else
-      dataString += v;
+    addValueNan(dataString, v);
   }
-  for (int i = 0; i < 4; ++i) {
-    dataString += ":";
-    if (data.ds18b20.size() > i)
-      dataString += data.ds18b20[i];
-    else
-      dataString += "U";
-  }
+  addValueNan(dataString, data.ds18b20_13);
+  addValueNan(dataString, data.ds18b20_16);
   dataString += "\"]}";
 
   return dataString;

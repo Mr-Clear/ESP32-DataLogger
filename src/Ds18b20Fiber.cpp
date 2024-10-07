@@ -48,8 +48,5 @@ void Ds18b20Fiber::loop() {
             values[deviceAddress2String(deviceAddress)] = tempC;
         }
     }
-    if(_sensors->getDeviceCount() != 3) {
-        _sensors->begin();
-    }
     _data = values;
 }

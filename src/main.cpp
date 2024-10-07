@@ -19,10 +19,8 @@
 #include <optional>
 #include <vector>
 
-#define ADC_PIN 34
 #define BUTTON_PIN 0
 #define LED_PIN 2
-#define DS18B20_PIN 16
 
 /*
 rrd.create('dataBalkon',
@@ -48,14 +46,6 @@ rrd.create('dataBalkon',
 rrdtool create dataBalkon.rrd --step 1 --start 1672527600 DS:Duration:GAUGE:5:U:U DS:Voltage:GAUGE:5:U:U DS:TempAussen:GAUGE:5:U:U DS:HumAussen:GAUGE:5:U:U DS:TempIntern:GAUGE:5:U:U DS:TempLinks:GAUGE:5:U:U DS:TempRechts:GAUGE:5:U:U RRA:AVERAGE:0.9:1:2678400 RRA:AVERAGE:0.5:60:527040 RRA:MIN:0.5:60:527040 RRA:MAX:0.5:60:527040 RRA:AVERAGE:0.5:3600:87672 RRA:MIN:0.5:3600:87672 RRA:MAX:0.5:86400:36525 RRA:AVERAGE:0.5:86400:36525 RRA:MIN:0.5:86400:36525 RRA:MAX:0.5:86400:36525
 */
 
-constexpr const int ds18b20Count = 4;
-std::array<String, ds18b20Count> ds18b20Order{{
-  "28d6d743d48650d6", // 1 (Luft)
-  "286bb343d406055e", // 2 (Erde)
-  "28425b43d4b823ba", // 3 (Teich)
-  "28526543d4e13cde", // 4 (Intern)
-}};
-
 std::optional<time_t> getTime();
 String formatTime(const std::optional<time_t> &timestamp);
 
@@ -67,12 +57,14 @@ const char* time_zone = "CET-1CEST,M3.5.0,M10.5.0/3";  // TimeZone rule for Euro
 
 using Callback = std::function<void()>;
 
+PostData postData;
+std::mutex postDataMutex;
+
 WifiKeepAliveTask wifiTask;
 
 FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
-AdcFiber adcFiber;
 Sht30Fiber sht30Fiber;
-Ds18b20Fiber ds18b20Fiber(DS18B20_PIN);
+std::array<std::tuple<int, float&>, 2> ds18b20Ports{{{13, postData.ds18b20_13}, {16, postData.ds18b20_16}}};
 
 HttpPostTask httpPostTask(std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
 
@@ -80,8 +72,6 @@ using ValueTask = QueueTask<Callback>;
 std::vector<ValueTask*> valueTasks{&fiberQueueTask1};
 SemaphoreHandle_t valuesSemaphore;
 
-PostData postData;
-std::mutex postDataMutex;
 
 void setup(void) {
   Serial.begin(115200);
@@ -91,9 +81,21 @@ void setup(void) {
   sntp_servermode_dhcp(0);
   configTzTime(time_zone, ntpServer);
 
-  fiberQueueTask1.addFiber(adcFiber);
   fiberQueueTask1.addFiber(sht30Fiber);
-  fiberQueueTask1.addFiber(ds18b20Fiber);
+
+  for(auto [port, value] : ds18b20Ports) {
+    auto f = new Ds18b20Fiber(port); // live long and prosper
+    fiberQueueTask1.addFiber(*f);
+    f->data().addObserver( [&value] ( const std::map<String, float> &values) {
+      std::lock_guard<std::mutex> lck(postDataMutex);
+      const auto i = values.begin();
+      if(i != values.end()) {
+        value = i->second;
+      } else {
+        value = NAN;
+      }
+    });
+  }
 
   wifiTask.start();
   httpPostTask.start();
@@ -102,13 +104,6 @@ void setup(void) {
     valueTask->start();
   }
   valuesSemaphore = xSemaphoreCreateCounting(valueTasks.size(), 0);
-
-  adcFiber.channel(ADC_PIN).addObserver([] (double v) {
-    const double voltage = v * 2.0;
-    std::lock_guard<std::mutex> lck(postDataMutex);
-    postData.voltage = voltage;
-    Serial.println("VCC: " + String(voltage) + " V");
-  });
 
   sht30Fiber.data().addObserver( [] (const Sht30Fiber::Data &data) {
     std::lock_guard<std::mutex> lck(postDataMutex);
@@ -121,32 +116,8 @@ void setup(void) {
     Serial.println(tmp + ", " + hum);
   });
 
-  ds18b20Fiber.data().addObserver( [] ( const std::map<String, float> &values) {
-    std::array<float, ds18b20Count> ds18b20;
-    std::vector<String> ds18b20Strings;
-    String s;
-    int i = 0;
-    for(const String &address : ds18b20Order) {
-      const float temperature = values.count(address) ? values.at(address) : NAN;
-      ds18b20[i] = temperature;
-      s += address + ": " + temperature + " ";
-      ++i;
-    }
-    for(const auto &[address, value] : values) {
-      if(std::find(ds18b20Order.begin(), ds18b20Order.end(), address) == ds18b20Order.end())
-        Serial.println(address + ": " + value);
-    }
-    if(!s.isEmpty())
-      Serial.println(s);
-    std::lock_guard<std::mutex> lck(postDataMutex);
-    postData.ds18b20 = ds18b20;
-  });
-
   addGpioEvent(BUTTON_PIN, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
     if(type == GpioEventType::Falling) {
-      Serial.print("Scanning DS18B20... ");
-      uint8_t devices = ds18b20Fiber.scan();
-      Serial.println(String(devices) + " devices found.");
       sht30Fiber.scan();
     }
   });

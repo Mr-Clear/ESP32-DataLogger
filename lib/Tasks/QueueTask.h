@@ -23,7 +23,7 @@ public:
 
 protected:
   virtual void setup() = 0;
-  /** @returns true when the message was handles successfully. */
+  /** @returns true when the message was handled successfully. */
   virtual bool handleMessage(const T &data) = 0;
 
 private:
