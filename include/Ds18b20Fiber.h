@@ -16,7 +16,7 @@ public:
   ~Ds18b20Fiber();
 
   const Observable<std::map<String, float>> &data();
-  uint8_t scan();
+  void scan();
   
 protected:
   void setup() override;
@@ -27,4 +27,5 @@ private:
   std::unique_ptr<DallasTemperature> _sensors;
   ObservableValue<std::map<String, float>> _data;
   uint8_t _pin;
+  bool _rescan = false;
 };

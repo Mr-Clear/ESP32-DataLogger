@@ -38,4 +38,5 @@ private:
   ObservableValue<float> _temperature;
   ObservableValue<float> _humidity;
   ObservableValue<uint8_t> _error;
+  bool _rescan = false;
 };

@@ -13,7 +13,7 @@ Sht30Fiber::Sht30Fiber() = default;
 Sht30Fiber::~Sht30Fiber() = default;
 
 void Sht30Fiber::scan() {
-  _sensor->Begin();
+  _rescan = true;
 }
 
 const Observable<Sht30Fiber::Data> &Sht30Fiber::data(){
@@ -37,6 +37,10 @@ void Sht30Fiber::setup() {
 }
 
 void Sht30Fiber::loop() {
+  if (_rescan) {
+    _sensor->Begin();
+    _rescan = false;
+  }
   _sensor->UpdateData();
   const uint8_t sensorError = _sensor->GetError();
   Data data;

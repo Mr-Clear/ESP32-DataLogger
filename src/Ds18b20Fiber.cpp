@@ -26,9 +26,8 @@ const Observable<std::map<String, float>> &Ds18b20Fiber::data() {
     return _data;
 }
 
-uint8_t Ds18b20Fiber::scan() {
-    _sensors->begin();
-    return _sensors->getDeviceCount();
+void Ds18b20Fiber::scan() {
+    _rescan = true;
 }
 
 void Ds18b20Fiber::setup() {
@@ -39,6 +38,10 @@ void Ds18b20Fiber::setup() {
 }
 
 void Ds18b20Fiber::loop() {
+    if (_rescan) {
+        _sensors->begin();
+        _rescan = false;
+    }
     std::map<String, float> values;
     _sensors->requestTemperatures();
     for (int i=0; i < _sensors->getDeviceCount(); i++) {
