@@ -3,6 +3,8 @@
 #include <limits.h>
 #include <stdint.h>
 
+class tskTaskControlBlock;
+
 class Task {
 public:
   enum class Core {
@@ -28,7 +30,7 @@ private:
   Core _core;
   volatile bool _stopped;
   volatile bool _running;
-  void* _handle;
+  tskTaskControlBlock* _handle;
   
   void taskStarter();
   static void taskStarter(void* task);
