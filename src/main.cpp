@@ -1,4 +1,5 @@
 #include "AdcFiber.h"
+#include "Dht21Fiber.h"
 #include "Ds18b20Fiber.h"
 #include "Gpio.h"
 #include "HttpPostTask.h"
@@ -64,7 +65,11 @@ WifiKeepAliveTask wifiTask;
 
 FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
 Sht30Fiber sht30Fiber;
-std::array<std::tuple<int, float&>, 2> ds18b20Ports{{{13, postData.ds18b20_13}, {16, postData.ds18b20_16}}};
+Dht21Fiber dht21Fiber{18};
+std::vector<std::tuple<int, float&, Ds18b20Fiber*>> ds18b20Ports
+  {{{13, postData.ds18b20_13, nullptr},
+    {16, postData.ds18b20_16, nullptr},
+    {17, postData.ds18b20_17, nullptr}}};
 
 HttpPostTask httpPostTask(std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
 
@@ -72,21 +77,19 @@ using ValueTask = QueueTask<Callback>;
 std::vector<ValueTask*> valueTasks{&fiberQueueTask1};
 SemaphoreHandle_t valuesSemaphore;
 
-
 void setup(void) {
   Serial.begin(115200);
-  Serial.println();
-
   Serial.println("Connect WIFI...");
   sntp_servermode_dhcp(0);
   configTzTime(time_zone, ntpServer);
 
   fiberQueueTask1.addFiber(sht30Fiber);
+  fiberQueueTask1.addFiber(dht21Fiber);
 
-  for(auto [port, value] : ds18b20Ports) {
-    auto f = new Ds18b20Fiber(port); // live long and prosper
-    fiberQueueTask1.addFiber(*f);
-    f->data().addObserver( [&value] ( const std::map<String, float> &values) {
+  for(auto &[port, value, fiber] : ds18b20Ports) {
+    fiber = new Ds18b20Fiber(port); // live long and prosper
+    fiberQueueTask1.addFiber(*fiber);
+    fiber->data().addObserver( [&value, port] ( const std::map<String, float> &values) {
       std::lock_guard<std::mutex> lck(postDataMutex);
       const auto i = values.begin();
       if(i != values.end()) {
@@ -94,6 +97,7 @@ void setup(void) {
       } else {
         value = NAN;
       }
+      //Serial.println(String("DS18B20 ") + port + " Tmp: " + value);
     });
   }
 
@@ -110,15 +114,27 @@ void setup(void) {
     postData.sht30Temperature = data.error ? NAN : data.temperature;
     postData.sht30Humidity = data.error ? NAN : data.humidity;
 
-    const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature)));
-    const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity)));
+    // const String tmp = (data.error ? ("Tmp Err: " + String(data.error)) : ("Tmp: " + String(data.temperature)));
+    // const String hum = (data.error ? ("Hum Err: " + String(data.error)) : ("Hum: " + String(data.humidity)));
+    // Serial.println("SHT30:" + tmp + ", " + hum);
+  });
 
-    Serial.println(tmp + ", " + hum);
+  dht21Fiber.data().addObserver( [] (const Dht21Fiber::Data &data) {
+    std::lock_guard<std::mutex> lck(postDataMutex);
+    postData.dht21Temperature = data.temperature;
+    postData.dht21Humidity = data.humidity;
+    //Serial.println(String("DHT21: Tmp: ") + data.temperature + ", Hum: " + data.humidity);
   });
 
   addGpioEvent(BUTTON_PIN, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
     if(type == GpioEventType::Falling) {
+      Serial.println("Rescan...");
       sht30Fiber.scan();
+      dht21Fiber.scan();
+      for(auto &[_1, _2, fiber] : ds18b20Ports) {
+        fiber->scan();
+      }
+      Serial.println("Rescan done.");
     }
   });
 
@@ -141,15 +157,16 @@ unsigned long lastStart = 0;
 time_t lastSend = 0;
 bool ledOn = true;
 void loop() {
+
   const unsigned long start = millis();
   const unsigned long loopTime = start - lastStart;
   lastStart = start;
 
-  std::optional<time_t> time = getTime();
+  std::optional<time_t> currentTime = getTime();
   {
     std::lock_guard<std::mutex> lck(postDataMutex);
     postData = {};
-    postData.timestamp = time;
+    postData.timestamp = currentTime;
   }
   
   for(ValueTask *valueTask : valueTasks) {
@@ -161,7 +178,7 @@ void loop() {
   }
 
   const bool sendQueueEmpty = httpPostTask.queue().empty();
-  if(sendQueueEmpty || time.has_value()) {
+  if(sendQueueEmpty || currentTime.has_value()) {
     PostData postDataCopy;
     {
       std::lock_guard<std::mutex> lck(postDataMutex);
@@ -172,11 +189,11 @@ void loop() {
     if(!sendQueueEmpty) {
       const double expFactor = 0.026896345;  // With this value, the buffer runs full in 7 days.
       const int sendInterval = static_cast<int>(std::pow(2, expFactor * httpPostTask.queue().size()));
-      send = time.has_value() ? (difftime(time.value(), lastSend) >= sendInterval) : true;
+      send = currentTime.has_value() ? (difftime(currentTime.value(), lastSend) >= sendInterval) : true;
     }
     if(send) {
       httpPostTask.send(postDataCopy, 100);
-      lastSend = time.value_or(0);
+      lastSend = currentTime.value_or(0);
     }
   }
 

@@ -15,8 +15,11 @@ struct PostData {
   unsigned long duration = -1;
   float sht30Temperature = NAN;
   float sht30Humidity = NAN;
-  float ds18b20_13;
-  float ds18b20_16;
+  float dht21Temperature = NAN;
+  float dht21Humidity = NAN;
+  float ds18b20_13 = NAN;
+  float ds18b20_16 = NAN;
+  float ds18b20_17 = NAN;
   uint8_t sht30Error = 1;
   std::optional<time_t> timestamp = {};
 };
