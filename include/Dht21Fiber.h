@@ -14,7 +14,8 @@ public:
   struct Data {
     float temperature;
     float humidity;
-    bool operator==(const Data&) const = default;
+    bool operator==(const Data&) const;
+    bool operator!=(const Data&) const;
   };
 
   Dht21Fiber(uint8_t pin);

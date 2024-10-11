@@ -23,6 +23,14 @@ void addValueGEZ(String &s, T value) {
   addValue(s, value, value >= 0);
 }
 
+template <typename K, typename V>
+void addValueMap(String &s, const std::map<K, V> &map, const K &key) {
+  if(map.count(key))
+    addValue(s, map.at(key), true);
+  else
+    addValue(s, V{}, false);
+}
+
 HttpPostTask::HttpPostTask(std::function<bool()> getWifiConnected) :
   QueueTask(500, "HTTP POST", 8192, 10, Core::Core0),
   _getWifiConnected(getWifiConnected) { }
@@ -38,31 +46,23 @@ bool HttpPostTask::handleMessage(const PostData &data) {
   bool success = false;
   if (_getWifiConnected()) {
     const String postDataSource = createPostData(data);
-    
-
-    Serial.println("                               data.timestamp  :dura:SHT30:SHT30:DTH21:DTH21:DS-13:DS-16:DS-17   ");
     Serial.println(postDataSource);
-    return true;
-    if (postDataSource.length()) {
-      if (_httpClient->begin("https://www.klierlinge.de/rrd/update"))
-      {
-        const int httpResponseCode = _httpClient->POST(postDataSource);
-        if (httpResponseCode != 200) {
-          Serial.println(postDataSource + " -> " + httpResponseCode);
-          Serial.println(_httpClient->getString());
-        }
-        success = true;
-        _httpClient->end();
-      }
+    assert(_httpClient->begin("https://www.klierlinge.de/rrd/update"));
+    const int httpResponseCode = _httpClient->POST(postDataSource);
+    if (httpResponseCode != 200) {
+      Serial.println(postDataSource + " -> " + httpResponseCode);
+      Serial.println(_httpClient->getString());
     }
+    success = true;
+    _httpClient->end();
   }
   return success;
 }
 
 String HttpPostTask::createPostData(const PostData &data) {
   String dataString;
-  dataString.reserve(1024);
-  dataString += "{\"args\": [\"dataTerrasse.rrd\", \"";
+  dataString.reserve(1000);
+  dataString += "{\"args\": [\"dataKeller.rrd\", \"";
   if (data.timestamp.has_value())
     dataString += data.timestamp.value();
   else
@@ -72,9 +72,10 @@ String HttpPostTask::createPostData(const PostData &data) {
   addValueNan(dataString, data.sht30Humidity);
   addValueNan(dataString, data.dht21Temperature);
   addValueNan(dataString, data.dht21Humidity);
-  addValueNan(dataString, data.ds18b20_13);
-  addValueNan(dataString, data.ds18b20_16);
-  addValueNan(dataString, data.ds18b20_17);
+  addValueMap(dataString, data.ds18b20, String{"28bff880e3e13cf3"}); // Intern
+  addValueMap(dataString, data.ds18b20, String{"28425b43d4b823ba"}); // Outside
+  addValueMap(dataString, data.ds18b20, String{"28d6d743d48650d6"}); // Inside 1 (Punkt)
+  addValueMap(dataString, data.ds18b20, String{"286bb343d406055e"}); // Inside 2
   dataString += "\"]}";
 
   return dataString;

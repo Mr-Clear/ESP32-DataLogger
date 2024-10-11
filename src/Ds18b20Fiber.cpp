@@ -15,7 +15,8 @@ String deviceAddress2String(DeviceAddress deviceAddress) {
     }
     return s;
 }
-}
+
+} // namespace
 
 Ds18b20Fiber::Ds18b20Fiber(uint8_t pin) :
   _pin{pin}
@@ -34,12 +35,12 @@ void Ds18b20Fiber::setup() {
     _oneWire.reset(new OneWire(_pin));
     _sensors.reset(new DallasTemperature(_oneWire.get()));
 
-    _sensors->begin();
+    initSensor();
 }
 
 void Ds18b20Fiber::loop() {
     if (_rescan) {
-        _sensors->begin();
+        initSensor();
         _rescan = false;
     }
     std::map<String, float> values;
@@ -52,4 +53,14 @@ void Ds18b20Fiber::loop() {
         }
     }
     _data = values;
+}
+
+void Ds18b20Fiber::initSensor() {
+    _sensors->begin();
+    for (int i=0; i < _sensors->getDeviceCount(); i++) {
+        DeviceAddress deviceAddress;
+        if (_sensors->getAddress(deviceAddress, i)) {
+            Serial.println(String("DS18B20 ") + _pin + ": " + deviceAddress2String(deviceAddress));
+        }
+    }
 }

@@ -23,6 +23,8 @@ protected:
   void loop() override;
 
 private:
+  void initSensor();
+  
   std::unique_ptr<OneWire> _oneWire;
   std::unique_ptr<DallasTemperature> _sensors;
   ObservableValue<std::map<String, float>> _data;

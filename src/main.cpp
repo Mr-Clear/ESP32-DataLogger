@@ -24,18 +24,18 @@
 #define LED_PIN 2
 
 /*
-rrd.create('dataBalkon',
+rrd.create('dataKeller',
             [ds('Duration', heartbeat=5),
-            ds('Voltage', heartbeat=5),
-            ds('TempAussen', heartbeat=5),
-            ds('HumAussen', heartbeat=5),
-            ds('TempIntern', heartbeat=5),
-            ds('TempLinks', heartbeat=5),
-            ds('TempRechts', heartbeat=5)],
+            ds('OutTemp', heartbeat=5, min=-30, max=70),
+            ds('OutHum', heartbeat=5, min=0, max=100),
+            ds('InTemp', heartbeat=5, min=-30, max=70),
+            ds('InHum', heartbeat=5, min=0, max=100),
+            ds('InternTemp', heartbeat=5, min=-30, max=70),
+            ds('OutTemp2', heartbeat=5, min=-30, max=70),
+            ds('InTemp2', heartbeat=5, min=-30, max=70),
+            ds('InTemp3', heartbeat=5, min=-30, max=70)],
             [r(t.AVERAGE, 0.9, timedelta(seconds=1), timedelta(days=31)),
-            r(t.AVERAGE, 0.5, timedelta(minutes=1), timedelta(days=366)),
-            r(t.MIN, 0.5, timedelta(minutes=1), timedelta(days=366)),
-            r(t.MAX, 0.5, timedelta(minutes=1), timedelta(days=366)),
+            r(t.AVERAGE, 0.5, timedelta(seconds=10), timedelta(days=366)),
             r(t.AVERAGE, 0.5, timedelta(hours=1), timedelta(days=3653)),
             r(t.MIN, 0.5, timedelta(hours=1), timedelta(days=3653)),
             r(t.MAX, 0.5, timedelta(days=1), timedelta(days=36525)),
@@ -43,8 +43,6 @@ rrd.create('dataBalkon',
             r(t.MIN, 0.5, timedelta(days=1), timedelta(days=36525)),
             r(t.MAX, 0.5, timedelta(days=1), timedelta(days=36525))],
             step=timedelta(seconds=1), overwrite=True)
-
-rrdtool create dataBalkon.rrd --step 1 --start 1672527600 DS:Duration:GAUGE:5:U:U DS:Voltage:GAUGE:5:U:U DS:TempAussen:GAUGE:5:U:U DS:HumAussen:GAUGE:5:U:U DS:TempIntern:GAUGE:5:U:U DS:TempLinks:GAUGE:5:U:U DS:TempRechts:GAUGE:5:U:U RRA:AVERAGE:0.9:1:2678400 RRA:AVERAGE:0.5:60:527040 RRA:MIN:0.5:60:527040 RRA:MAX:0.5:60:527040 RRA:AVERAGE:0.5:3600:87672 RRA:MIN:0.5:3600:87672 RRA:MAX:0.5:86400:36525 RRA:AVERAGE:0.5:86400:36525 RRA:MIN:0.5:86400:36525 RRA:MAX:0.5:86400:36525
 */
 
 std::optional<time_t> getTime();
@@ -66,10 +64,10 @@ WifiKeepAliveTask wifiTask;
 FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
 Sht30Fiber sht30Fiber;
 Dht21Fiber dht21Fiber{18};
-std::vector<std::tuple<int, float&, Ds18b20Fiber*>> ds18b20Ports
-  {{{13, postData.ds18b20_13, nullptr},
-    {16, postData.ds18b20_16, nullptr},
-    {17, postData.ds18b20_17, nullptr}}};
+std::vector<std::tuple<int, Ds18b20Fiber*>> ds18b20Ports
+  {{{13, nullptr},
+    {16, nullptr},
+    {17, nullptr}}};
 
 HttpPostTask httpPostTask(std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
 
@@ -85,19 +83,13 @@ void setup(void) {
 
   fiberQueueTask1.addFiber(sht30Fiber);
   fiberQueueTask1.addFiber(dht21Fiber);
-
-  for(auto &[port, value, fiber] : ds18b20Ports) {
+  for(auto &[port, fiber] : ds18b20Ports) {
     fiber = new Ds18b20Fiber(port); // live long and prosper
     fiberQueueTask1.addFiber(*fiber);
-    fiber->data().addObserver( [&value, port] ( const std::map<String, float> &values) {
+    fiber->data().addObserver( [port] ( const std::map<String, float> &values) {
       std::lock_guard<std::mutex> lck(postDataMutex);
-      const auto i = values.begin();
-      if(i != values.end()) {
-        value = i->second;
-      } else {
-        value = NAN;
-      }
-      //Serial.println(String("DS18B20 ") + port + " Tmp: " + value);
+      postData.ds18b20.insert(values.begin(), values.end());
+      //Serial.println(String("DS18B20 ") + port + " Tmp: " + values);
     });
   }
 
@@ -131,7 +123,7 @@ void setup(void) {
       Serial.println("Rescan...");
       sht30Fiber.scan();
       dht21Fiber.scan();
-      for(auto &[_1, _2, fiber] : ds18b20Ports) {
+      for(auto &[_, fiber] : ds18b20Ports) {
         fiber->scan();
       }
       Serial.println("Rescan done.");

@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 
@@ -17,9 +18,7 @@ struct PostData {
   float sht30Humidity = NAN;
   float dht21Temperature = NAN;
   float dht21Humidity = NAN;
-  float ds18b20_13 = NAN;
-  float ds18b20_16 = NAN;
-  float ds18b20_17 = NAN;
+  std::map<String, float> ds18b20;
   uint8_t sht30Error = 1;
   std::optional<time_t> timestamp = {};
 };

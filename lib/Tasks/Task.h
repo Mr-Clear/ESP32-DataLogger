@@ -30,7 +30,7 @@ private:
   Core _core;
   volatile bool _stopped;
   volatile bool _running;
-  tskTaskControlBlock* _handle;
+  void* _handle;
   
   void taskStarter();
   static void taskStarter(void* task);

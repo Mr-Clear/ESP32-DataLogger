@@ -2,6 +2,15 @@
 
 #include <DHT_U.h>
 
+bool Dht21Fiber::Data::operator==(const Dht21Fiber::Data &other) const {
+    return temperature == other.temperature
+        && humidity == other.humidity;
+}
+
+bool Dht21Fiber::Data::operator!=(const Dht21Fiber::Data &other) const {
+    return !operator==(other);
+}
+
 Dht21Fiber::Dht21Fiber(uint8_t pin) :
   _pin{pin}
 { }
