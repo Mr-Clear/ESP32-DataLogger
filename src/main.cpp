@@ -63,11 +63,11 @@ WifiKeepAliveTask wifiTask;
 
 FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
 Sht30Fiber sht30Fiber;
-Dht21Fiber dht21Fiber{18};
 std::vector<std::tuple<int, Ds18b20Fiber*>> ds18b20Ports
   {{{13, nullptr},
     {16, nullptr},
-    {17, nullptr}}};
+    {17, nullptr},
+    {18, nullptr}}};
 
 HttpPostTask httpPostTask(std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
 
@@ -82,14 +82,12 @@ void setup(void) {
   configTzTime(time_zone, ntpServer);
 
   fiberQueueTask1.addFiber(sht30Fiber);
-  fiberQueueTask1.addFiber(dht21Fiber);
   for(auto &[port, fiber] : ds18b20Ports) {
     fiber = new Ds18b20Fiber(port); // live long and prosper
     fiberQueueTask1.addFiber(*fiber);
     fiber->data().addObserver( [port] ( const std::map<String, float> &values) {
       std::lock_guard<std::mutex> lck(postDataMutex);
       postData.ds18b20.insert(values.begin(), values.end());
-      //Serial.println(String("DS18B20 ") + port + " Tmp: " + values);
     });
   }
 
@@ -111,18 +109,10 @@ void setup(void) {
     // Serial.println("SHT30:" + tmp + ", " + hum);
   });
 
-  dht21Fiber.data().addObserver( [] (const Dht21Fiber::Data &data) {
-    std::lock_guard<std::mutex> lck(postDataMutex);
-    postData.dht21Temperature = data.temperature;
-    postData.dht21Humidity = data.humidity;
-    //Serial.println(String("DHT21: Tmp: ") + data.temperature + ", Hum: " + data.humidity);
-  });
-
   addGpioEvent(BUTTON_PIN, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
     if(type == GpioEventType::Falling) {
       Serial.println("Rescan...");
       sht30Fiber.scan();
-      dht21Fiber.scan();
       for(auto &[_, fiber] : ds18b20Ports) {
         fiber->scan();
       }

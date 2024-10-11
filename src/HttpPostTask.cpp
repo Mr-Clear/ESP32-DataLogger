@@ -62,7 +62,7 @@ bool HttpPostTask::handleMessage(const PostData &data) {
 String HttpPostTask::createPostData(const PostData &data) {
   String dataString;
   dataString.reserve(1000);
-  dataString += "{\"args\": [\"dataKeller.rrd\", \"";
+  dataString += "{\"args\": [\"dataKüche.rrd\", \"";
   if (data.timestamp.has_value())
     dataString += data.timestamp.value();
   else
@@ -70,12 +70,10 @@ String HttpPostTask::createPostData(const PostData &data) {
   addValueGEZ(dataString, data.duration);
   addValueNan(dataString, data.sht30Temperature);
   addValueNan(dataString, data.sht30Humidity);
-  addValueNan(dataString, data.dht21Temperature);
-  addValueNan(dataString, data.dht21Humidity);
-  addValueMap(dataString, data.ds18b20, String{"28bff880e3e13cf3"}); // Intern
-  addValueMap(dataString, data.ds18b20, String{"28425b43d4b823ba"}); // Outside
-  addValueMap(dataString, data.ds18b20, String{"28d6d743d48650d6"}); // Inside 1 (Punkt)
-  addValueMap(dataString, data.ds18b20, String{"286bb343d406055e"}); // Inside 2
+  addValueMap(dataString, data.ds18b20, String{"282d1d43d4e13c31"}); // Intern
+  addValueMap(dataString, data.ds18b20, String{"2844fb43d44c363b"}); // Boden (Ohne)
+  addValueMap(dataString, data.ds18b20, String{"2826515704e13d70"}); // Kühlschrank (Grün)
+  addValueMap(dataString, data.ds18b20, String{"28a19e5704e13d52"}); // Fenster (Dick)
   dataString += "\"]}";
 
   return dataString;

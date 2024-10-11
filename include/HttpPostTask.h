@@ -13,14 +13,12 @@
 class HTTPClient;
 
 struct PostData {
+  std::optional<time_t> timestamp = {};
   unsigned long duration = -1;
   float sht30Temperature = NAN;
   float sht30Humidity = NAN;
-  float dht21Temperature = NAN;
-  float dht21Humidity = NAN;
-  std::map<String, float> ds18b20;
   uint8_t sht30Error = 1;
-  std::optional<time_t> timestamp = {};
+  std::map<String, float> ds18b20;
 };
 
 class HttpPostTask : public QueueTask<PostData> {
