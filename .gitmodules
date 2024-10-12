@@ -16,3 +16,9 @@
 [submodule "lib/DHT-sensor-library"]
 	path = lib/DHT-sensor-library
 	url = https://github.com/adafruit/DHT-sensor-library
+[submodule "lib/Adafruit-BMP085-Library"]
+	path = lib/Adafruit-BMP085-Library
+	url = https://github.com/adafruit/Adafruit-BMP085-Library
+[submodule "lib/Adafruit_BusIO"]
+	path = lib/Adafruit_BusIO
+	url = https://github.com/adafruit/Adafruit_BusIO
