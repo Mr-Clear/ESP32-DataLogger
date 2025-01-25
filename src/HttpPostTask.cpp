@@ -62,17 +62,19 @@ bool HttpPostTask::handleMessage(const PostData &data) {
 String HttpPostTask::createPostData(const PostData &data) {
   String dataString;
   dataString.reserve(1000);
-  dataString += "{\"args\": [\"dataBedroom.rrd\", \"";
+  dataString += "{\"args\": [\"dataOffice.rrd\", \"";
   if (data.timestamp.has_value())
     dataString += data.timestamp.value();
   else
     dataString += "N";
   addValueGEZ(dataString, data.duration);
-  addValueNan(dataString, data.dht20Temperature);
-  addValueNan(dataString, data.dht20Humidity);
-  addValueMap(dataString, data.ds18b20, String{"28dc6243d4e13c76"}); // Intern
-  addValueMap(dataString, data.ds18b20, String{"286fe180e3e13cb8"}); // Bed
-  addValueNan(dataString, data.apds9930);
+  addValueNan(dataString, data.bme280Temperature);
+  addValueNan(dataString, data.bme280Humidity);
+  addValueNan(dataString, data.bme280SeaLevelPressure);
+  addValueMap(dataString, data.ds18b20, String{"28539343d4e13cd3"}); // Intern
+  addValueMap(dataString, data.ds18b20, String{"28cdc143d42956be"}); // Lang
+  addValueMap(dataString, data.ds18b20, String{"28a8505704e13d44"}); // Kurz
+  addValueMap(dataString, data.ds18b20, String{"28c64d5704e13d04"}); // Kurz III
   dataString += "\"]}";
 
   return dataString;
