@@ -62,18 +62,17 @@ bool HttpPostTask::handleMessage(const PostData &data) {
 String HttpPostTask::createPostData(const PostData &data) {
   String dataString;
   dataString.reserve(1000);
-  dataString += "{\"args\": [\"dataBad.rrd\", \"";
+  dataString += "{\"args\": [\"dataBedroom.rrd\", \"";
   if (data.timestamp.has_value())
     dataString += data.timestamp.value();
   else
     dataString += "N";
   addValueGEZ(dataString, data.duration);
-  addValueNan(dataString, data.dht21Temperature);
-  addValueNan(dataString, data.dht21Humidity);
-  addValueGEZ(dataString, data.bmp180Temperature);
-  addValueGEZ(dataString, data.bmp180PressureSeaLevel);
-  addValueMap(dataString, data.ds18b20, String{"280c7043d4e13c4d"}); // Intern
-  addValueMap(dataString, data.ds18b20, String{"282ae85704e13db1"}); // Extern
+  addValueNan(dataString, data.dht20Temperature);
+  addValueNan(dataString, data.dht20Humidity);
+  addValueMap(dataString, data.ds18b20, String{"28dc6243d4e13c76"}); // Intern
+  addValueMap(dataString, data.ds18b20, String{"286fe180e3e13cb8"}); // Bed
+  addValueNan(dataString, data.apds9930);
   dataString += "\"]}";
 
   return dataString;

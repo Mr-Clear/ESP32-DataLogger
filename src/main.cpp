@@ -1,9 +1,9 @@
 #include "AdcFiber.h"
-#include "Dht21Fiber.h"
+#include "Apds9930Fiber.h"
+#include "Dht20Fiber.h"
 #include "Ds18b20Fiber.h"
 #include "Gpio.h"
 #include "HttpPostTask.h"
-#include "Bmp180Fiber.h"
 #include "WifiKeepAliveTask.h"
 
 #include <FiberQueueTask.h>
@@ -60,11 +60,11 @@ std::mutex postDataMutex;
 WifiKeepAliveTask wifiTask;
 
 FiberQueueTask fiberQueueTask1(1000, "FiberQueueTask1", 8192, 10, Task::Core::Core1);
-Dht21Fiber dht21Fiber{18};
-Bmp180Fiber bmp180Fiber;
+Dht20Fiber dht20Fiber;
+Apds9930Fiber apds9930Fiber;
 std::vector<std::tuple<int, Ds18b20Fiber*>> ds18b20Ports
   {{{13, nullptr},
-    {17, nullptr}}};
+    {18, nullptr}}};
 
 HttpPostTask httpPostTask(std::bind(&WifiKeepAliveTask::isWifiConnected, &wifiTask));
 
@@ -74,16 +74,20 @@ SemaphoreHandle_t valuesSemaphore;
 
 void setup(void) {
   Serial.begin(115200);
-  Serial.println("Connect WIFI...");
+  sleep(1);
+  Serial.println("STARTING");
   sntp_servermode_dhcp(0);
   configTzTime(time_zone, ntpServer);
 
-  fiberQueueTask1.addFiber(dht21Fiber);
-  fiberQueueTask1.addFiber(bmp180Fiber);
+  fiberQueueTask1.addFiber(dht20Fiber);
+  fiberQueueTask1.addFiber(apds9930Fiber);
   for(auto &[port, fiber] : ds18b20Ports) {
     fiber = new Ds18b20Fiber(port); // live long and prosper
     fiberQueueTask1.addFiber(*fiber);
     fiber->data().addObserver( [port] ( const std::map<String, float> &values) {
+      for (const auto &[address, value] : values) {
+        //Serial.println(String("DS18B20 ") + port + ": " + address + " -> " + value);
+      }
       std::lock_guard<std::mutex> lck(postDataMutex);
       postData.ds18b20.insert(values.begin(), values.end());
     });
@@ -97,23 +101,24 @@ void setup(void) {
   }
   valuesSemaphore = xSemaphoreCreateCounting(valueTasks.size(), 0);
 
-  dht21Fiber.data().addObserver( [] (const Dht21Fiber::Data &data) {
+  dht20Fiber.data().addObserver( [] (const Dht20Fiber::Data &data) {
     std::lock_guard<std::mutex> lck(postDataMutex);
-    postData.dht21Temperature = data.temperature;
-    postData.dht21Humidity = data.humidity;
-    //Serial.println(String("DHT21: Tmp: ") + data.temperature + ", Hum: " + data.humidity);
+    postData.dht20Temperature = data.temperature;
+    postData.dht20Humidity = data.humidity;
+    //Serial.println(String("DHT20: Tmp: ") + data.temperature + ", Hum: " + data.humidity);
   });
 
-  bmp180Fiber.data().addObserver( [] (const Bmp180Fiber::Data &data) {
+  apds9930Fiber.data().addObserver( [] (float data) {
     std::lock_guard<std::mutex> lck(postDataMutex);
-    postData.bmp180Temperature = data.temperature;
-    postData.bmp180PressureSeaLevel = data.pressureSeaLevel;
+    postData.apds9930 = data;
+    //Serial.println(String("APDS9930: ") + data);
   });
 
   addGpioEvent(BUTTON_PIN, PinInputMode::PullUp, [] (uint8_t, GpioEventType type) {
     if(type == GpioEventType::Falling) {
       Serial.println("Rescan...");
-      dht21Fiber.scan();
+      dht20Fiber.scan();
+      apds9930Fiber.scan();
       for(auto &[_, fiber] : ds18b20Ports) {
         fiber->scan();
       }
@@ -140,7 +145,6 @@ unsigned long lastStart = 0;
 time_t lastSend = 0;
 bool ledOn = true;
 void loop() {
-
   const unsigned long start = millis();
   const unsigned long loopTime = start - lastStart;
   lastStart = start;
