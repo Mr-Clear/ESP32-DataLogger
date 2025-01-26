@@ -62,19 +62,18 @@ bool HttpPostTask::handleMessage(const PostData &data) {
 String HttpPostTask::createPostData(const PostData &data) {
   String dataString;
   dataString.reserve(1000);
-  dataString += "{\"args\": [\"dataOffice.rrd\", \"";
+  dataString += "{\"args\": [\"dataBad.rrd\", \"";
   if (data.timestamp.has_value())
     dataString += data.timestamp.value();
   else
     dataString += "N";
   addValueGEZ(dataString, data.duration);
-  addValueNan(dataString, data.bme280Temperature);
-  addValueNan(dataString, data.bme280Humidity);
-  addValueNan(dataString, data.bme280SeaLevelPressure);
-  addValueMap(dataString, data.ds18b20, String{"28539343d4e13cd3"}); // Intern
-  addValueMap(dataString, data.ds18b20, String{"28cdc143d42956be"}); // Lang
-  addValueMap(dataString, data.ds18b20, String{"28a8505704e13d44"}); // Kurz
-  addValueMap(dataString, data.ds18b20, String{"28c64d5704e13d04"}); // Kurz III
+  addValueNan(dataString, data.dht20Temperature);
+  addValueNan(dataString, data.dht20Humidity);
+  addValueGEZ(dataString, data.bmp180Temperature);
+  addValueGEZ(dataString, data.bmp180PressureSeaLevel);
+  addValueMap(dataString, data.ds18b20, String{"280c7043d4e13c4d"}); // Intern
+  addValueMap(dataString, data.ds18b20, String{"282ae85704e13db1"}); // Extern
   dataString += "\"]}";
 
   return dataString;
